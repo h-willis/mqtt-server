@@ -2,11 +2,18 @@ import socket
 from client import Client
 
 clients = []
+topics = {}
 
 
 class MQTTServer:
     def __init__(self):
         print('Starting server...')
+
+    def add_new_subscription(self, topic, client_id):
+        try:
+            topics[topic].append(client_id)
+        except KeyError:
+            topics[topic] = [client_id]
 
     def run(self):
         host = 'localhost'
@@ -26,17 +33,13 @@ class MQTTServer:
                     conn, addr = server_socket.accept()
                     print(f'Connection from {addr}')
 
-                    client = Client(conn)
+                    client = Client(
+                        conn, on_new_subscription=self.add_new_subscription)
                     if (client.validate_connection()):
                         client.run()
 
                 except KeyboardInterrupt:
                     break
-                    # data = conn.recv(1024)
-                    # print(f'Raw received: {data}')
-
-                    # if data:
-                    #     print(f"Received: {data.decode()}")
 
         print('Exiting')
 
