@@ -1,0 +1,76 @@
+MQTT Broker Software Requirements Specification
+1. Introduction
+1.1 Purpose
+
+The goal is to implement a lightweight MQTT broker in Python, capable of handling basic MQTT operations such as connecting clients, subscribing to topics, publishing messages, and maintaining sessions.
+1.2 Scope
+
+    Support for MQTT v3.1.1 (optionally MQTT v5.0 later).
+    Handle multiple clients concurrently.
+    Implement Quality of Service (QoS) levels 0 and 1 (QoS 2 optional).
+    Support basic authentication and access control.
+    Provide logging and monitoring.
+    Extensible for future enhancements (e.g., clustering, WebSockets).
+
+2. Functional Requirements
+2.1 Connection Handling
+
+    Accept client connections over TCP.
+    Support clean and persistent sessions.
+    Handle keep-alive timeouts and disconnect inactive clients.
+
+2.2 Publish/Subscribe Mechanism
+
+    Clients can publish messages to topics.
+    Clients can subscribe and unsubscribe from topics.
+    Support wildcard topic subscriptions (+, #).
+    Retain messages for new subscribers (optional feature).
+
+2.3 Quality of Service (QoS)
+
+    QoS 0: At most once delivery.
+    QoS 1: At least once delivery with PUBACK.
+    QoS 2 (optional): Exactly once delivery with PUBREC, PUBREL, and PUBCOMP.
+
+2.4 Authentication & Security
+
+    Support basic username/password authentication.
+    Allow TLS encryption for secure communication.
+    Implement access control lists (ACLs) for topic-level permissions (optional).
+
+2.5 Session Management
+
+    Support persistent sessions for reconnecting clients.
+    Store unacknowledged messages for disconnected clients with QoS 1 and 2.
+
+2.6 Retained Messages & Last Will
+
+    Clients can publish retained messages to topics.
+    Support "Last Will and Testament" (LWT) messages for client disconnection.
+
+2.7 Logging & Monitoring
+
+    Log client connections, disconnections, and errors.
+    Monitor published messages and subscriptions.
+    Provide a basic web interface or API for real-time monitoring (optional).
+
+3. Non-Functional Requirements
+3.1 Performance & Scalability
+
+    Support at least 100 concurrent connections.
+    Efficient message routing with minimal latency.
+    Handle high-frequency messages without excessive CPU/memory usage.
+
+3.2 Reliability & Fault Tolerance
+
+    Ensure message delivery within defined QoS constraints.
+    Avoid crashes due to malformed packets or incorrect client behavior.
+
+3.3 Extensibility
+
+    Modular architecture to support additional features like clustering, WebSockets, and database persistence.
+
+3.4 Compliance
+
+    Conform to MQTT v3.1.1 specifications.
+    Follow best practices for Python-based network applications.
