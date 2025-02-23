@@ -1,7 +1,11 @@
-class Client:
+import threading
+
+
+class MQTTConnection:
     def __init__(self, conn, on_new_subscription):
         print('Client created')
         self.running = False
+        self.client_id = None
         self.conn = conn
         self.on_new_subscription = on_new_subscription
 
@@ -22,12 +26,13 @@ class Client:
             header)
 
         payload = header[payload_start:]
-        client_id, will_topic, will_message = self.extract_payload(payload)
+        self.client_id, will_topic, will_message = self.extract_payload(
+            payload)
 
         print(
             f"Username: {username}, Password: {password}, LWT: {LWT}, Clean Session: {clean_session}, Keep Alive: {keep_alive}")
         print(
-            f"Client ID: {client_id}, Will Topic: {will_topic}, Will Message: {will_message}")
+            f"Client ID: {self.client_id}, Will Topic: {will_topic}, Will Message: {will_message}")
 
         self.acknowledge_connection()
 
@@ -110,6 +115,19 @@ class Client:
         data = bytearray([0x20, 0x02, 0x01, 0])
         self.conn.send(data)
 
+    def acknowledge_subscription(self, packet_id, qos_to_ack):
+        # TODO failed acknowledge for qos
+        packet_id_high_byte = (packet_id >> 8) & 0xFF
+        packet_id_low_byte = packet_id & 0xFF
+        # 4 = command byte, packet length, high and low packet id bytes
+        packet_length = 4 + len(qos_to_ack)
+        print(f'subacking {packet_id} {qos_to_ack} length {packet_length}')
+
+        data = bytearray(
+            [0x90, packet_length, packet_id_high_byte, packet_id_low_byte] + qos_to_ack)
+        print(f'suback packet {data}')
+        self.conn.send(data)
+
     def extract_subscription_message(self, payload):
         # Bits 3,2,1 and 0 of the fixed header of the SUBSCRIBE Control Packet are reserved and MUST be set to 0,0,1 and 0 respectively. The Server MUST treat any other value as malformed and close the Network Connection [MQTT-3.8.1-1].
         print(f'SUB message received {payload}')
@@ -128,6 +146,7 @@ class Client:
         print(f'packet id {packet_id}')
 
         topics = []
+        qos_to_ack = []
 
         while index < len(payload):
             # Extract Topic Length
@@ -142,13 +161,22 @@ class Client:
 
             # Extract QoS Level
             qos_level = payload[index]
+            qos_to_ack.append(qos_level)
             index += 1
 
             topics.append((topic_name, qos_level))
 
+        self.acknowledge_subscription(packet_id, qos_to_ack)
+        self.on_new_subscription(topic_name, self.client_id)
+
         print(topics)
 
         return packet_id, topics
+
+    def start(self):
+        # run thread start
+        run_thread = threading.Thread(target=self.run)
+        run_thread.start()
 
     def run(self):
         # threaded loop to look for incoming messages and handle keep alive etc.

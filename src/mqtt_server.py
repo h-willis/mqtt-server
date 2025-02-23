@@ -1,5 +1,6 @@
 import socket
-from client import Client
+from mqtt_connection import MQTTConnection
+from time import sleep
 
 clients = []
 topics = {}
@@ -33,15 +34,41 @@ class MQTTServer:
                     conn, addr = server_socket.accept()
                     print(f'Connection from {addr}')
 
-                    client = Client(
+                    client = MQTTConnection(
                         conn, on_new_subscription=self.add_new_subscription)
                     if (client.validate_connection()):
-                        client.run()
+                        clients.append(client)
+                        client.start()
+
+                    self.publish_sys_info()
 
                 except KeyboardInterrupt:
                     break
 
         print('Exiting')
+
+    def publish_sys_info(self):
+        while True:
+            sleep(5)
+            self.publish('$SYS/info', 'Some info')
+
+    def publish(self, topic, payload, qos=0):
+        command_byte = 0b00110000
+        topic_length = len(topic)
+        encoded_topic = topic.encode('utf-8')
+        encoded_payload = payload.encode('utf-8')
+
+        # variable header length + topic length + length of topic and payload (sometimes + packet_id if qos > 0)
+        length = 1 + 2 + topic_length + len(encoded_payload)
+
+        data = bytearray(
+            [command_byte, length, (topic_length << 8) & 0xff, topic_length & 0xff])
+        data.extend(encoded_topic)
+        data.extend(encoded_payload)
+
+        print(f'publish: {data}')
+
+        clients[0].conn.send(data)
 
 
 if __name__ == '__main__':
