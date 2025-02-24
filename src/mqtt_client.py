@@ -2,6 +2,8 @@ import socket
 import random
 import string
 
+from packet_handler import PacketHandler
+
 
 class MQTTClient:
     def __init__(self, address, port, client_id=None):
@@ -9,6 +11,9 @@ class MQTTClient:
         self.port = port
         self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client_id = client_id if client_id is not None else self.generate_random_client_id()
+        # callback funcs
+        self.on_connect = None
+        self.on_message = None
 
     def generate_random_client_id(self):
         return 'PYMQTTClient-'.join(random.choices(string.ascii_letters + string.digits, k=8))
@@ -16,22 +21,30 @@ class MQTTClient:
     def connect(self):
         try:
             self.conn.connect((self.address, self.port))
-            print(
-                f'Client: {self.client_id} connected to {self.address}:{self.port}')
+        except ConnectionRefusedError:
+            print("Couldn't connect to server")
+            return
 
-            # GPT generated for testing
-            connect_packet = bytearray(
-                b'\x10\x1f\x00\x04MQTT\x04\x02\x00<\x00\x13PYMQTTClient-00000000')
+        print(
+            f'Client: {self.client_id} connected to {self.address}:{self.port}')
 
-            self.conn.send(connect_packet)
+        # GPT generated for testing
+        connect_packet = bytearray(
+            b'\x10\x1f\x00\x04MQTT\x04\x02\x00<\x00\x13PYMQTTClient-00000000')
 
-            if self.handle_connack_response():
-                print('We connected')
-            else:
-                print('Couldnt connect')
+        self.conn.send(connect_packet)
+        data = self.conn.recv(1024)
+        handler = PacketHandler(data)
+        response = handler.handle_packet()
 
-        finally:
-            self.conn.close()
+        if response.success:
+            print('We connected')
+        else:
+            print('Couldnt connect')
+
+        while True:
+            data = self.conn.recv(1024)
+            print(f'recv {data}')
 
     def handle_connack_response(self):
         # Receive the data (this could be more dynamic based on the packet size)
