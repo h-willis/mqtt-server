@@ -43,7 +43,8 @@ COMMAND_BYTES = {
 
 
 class PacketResponse:
-    def __init__(self, success=False, reason=None, response=None):
+    def __init__(self, command, success=False, reason=None, response=None):
+        self.command = command
         self.success = success
         self.reason = reason
         self.response = response
@@ -55,7 +56,7 @@ class PacketHandler:
         self.handlers = {
             0x10: self.handler_not_implemented,  # "CONNECT"
             0x20: self.handle_connack,  # "CONNACK"
-            0x30: self.handler_not_implemented,  # "PUBLISH"
+            0x30: self.handle_publish,  # "PUBLISH"
             0x40: self.handler_not_implemented,  # "PUBACK"
             0x50: self.handler_not_implemented,  # "PUBREC"
             0x60: self.handler_not_implemented,  # "PUBREL"
@@ -65,7 +66,7 @@ class PacketHandler:
             0xA0: self.handler_not_implemented,  # "UNSUBSCRIBE"
             0xB0: self.handler_not_implemented,  # "UNSUBACK"
             0xC0: self.handler_not_implemented,  # "PINGREQ"
-            0xD0: self.handler_not_implemented,  # "PINGRESP"
+            0xD0: self.handle_pingresp,  # "PINGRESP"
             0xE0: self.handler_not_implemented,  # "DISCONNECT"
             0xF0: self.handler_not_implemented,  # "AUTH
         }
@@ -140,7 +141,10 @@ class PacketHandler:
         if response_flags != 0:
             print(f"Response flags: {response_flags}")
 
-        return PacketResponse(success=True)
+        return PacketResponse(command=0x20, success=True)
+
+    def handle_publish(self):
+        print(f'Handling publish for: {self.packet}')
 
     def handle_suback(self):
         # Receive the data (this could be more dynamic based on the packet size)
@@ -186,7 +190,12 @@ class PacketHandler:
 
         # Optionally handle additional scenarios if needed
 
-        return PacketResponse(success=True)
+        return PacketResponse(command=0x90, success=True)
+
+    def handle_pingresp(self):
+        print(f'Handling pingresp for {self.packet}')
+        print(f'TODO somehow use this for the client to know when it's connection is dead)
 
     def handler_not_implemented(self):
         print(f'HANDLER NOT IMPLEMENTED')
+        return PacketResponse(0x00, success=False, reason='Not implemented')

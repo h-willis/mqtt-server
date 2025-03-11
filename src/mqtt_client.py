@@ -51,21 +51,6 @@ class MQTTClient:
             print(f'Couldnt connect {response.reason}')
             return
 
-        # data = self.conn.recv(1024)
-        # handler = PacketHandler(data)
-        # response = handler.handle_packet()
-
-        # while True:
-        #     sleep(1)
-        #     print('Disconnecting')
-        #     disconnect_packet = bytearray(b'\x14\x00')
-        #     print(self.conn.send(disconnect_packet))
-        # # return
-
-        # mqtt_subscribe_packet = bytearray(b'\x82\x0a\x00\x05\x00\x05test/\x00')
-        # print(self.conn.fileno())
-        # self.conn.sendall(mqtt_subscribe_packet)
-
         self.ping_thread = threading.Thread(target=self.ping_manager)
         self.ping_thread.start()
 
@@ -79,7 +64,6 @@ class MQTTClient:
         mqtt_subscribe_packet = b'\x82\x07\x00\x01\x00\x02a/\x00'  # Subscribe to "a/"
 
         self.conn.sendall(mqtt_subscribe_packet)
-        # print('subscribing to test/')
 
     def publish(self, topic=None, payload=None):
         pub_packet = bytearray(
