@@ -187,6 +187,8 @@ class MQTTConnection:
 
             for idx, val in enumerate(recv):
                 if val == 0x82:
+                    message_length = recv[idx + 1]
+                    message_length += 2  # account for the length bytes not part of the length
                     self.extract_subscription_message(
                         # TODO this slicing is unpleasant
-                        recv[idx:idx + recv[idx + 1] + 2])
+                        recv[idx:idx + message_length])

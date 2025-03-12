@@ -194,7 +194,7 @@ class PacketHandler:
 
     def handle_pingresp(self):
         print(f'Handling pingresp for {self.packet}')
-        print(f'TODO somehow use this for the client to know when it's connection is dead)
+        print("TODO somehow use this for the client to know when it's connection is dead")
 
     def handler_not_implemented(self):
         print(f'HANDLER NOT IMPLEMENTED')
