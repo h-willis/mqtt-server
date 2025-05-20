@@ -16,6 +16,8 @@ class MQTTClient:
         self.client_id = client_id if client_id is not None else self.generate_random_client_id()
         # callback funcs
         self.on_connect = None
+        # TODO link to disconnect on disconnect
+        self.on_disconnect = None
         self.on_message = None
         # keepalive duration
         self.ping_thread = None
@@ -46,6 +48,7 @@ class MQTTClient:
         response = handler.handle_packet()
 
         if response.success:
+            # TODO link to on_connect method here
             print('We connected')
         else:
             print(f'Couldnt connect {response.reason}')
@@ -72,6 +75,8 @@ class MQTTClient:
         self.conn.sendall(pub_packet)
 
     def ping_manager(self):
+        # TODO make this timer based which resets on every comms with server
+        # (publishing or acknowloging)
         while True:
             self.ping_server()
             sleep(self.keep_alive - 1)
@@ -84,12 +89,14 @@ class MQTTClient:
     def loop(self):
         print('Entering loop')
         while True:
+            # TODO read more data if this isnt long enough
             data = self.conn.recv(1024)
             if not data:
                 print(f'{self.client_id} Disconnected')
                 return
             print(f'recv {data}')
             response = PacketHandler(data).handle_packet()
+            # TODO link to on_message method here
             print(response)
 
 

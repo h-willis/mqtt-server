@@ -23,6 +23,12 @@
 # might get difficult for handshakey stuff for qos 1 and 2 messages
 # might need a Message class to track unacked messages or stuff like that
 
+
+class MQTTMessage:
+    def __init__(self):
+        self.packet_id = None
+
+
 COMMAND_BYTES = {
     0x10: "CONNECT",
     0x20: "CONNACK",
@@ -76,6 +82,7 @@ class PacketHandler:
         if not self.packet:
             return PacketResponse(False, 'No Packet')
         command = self.packet[0] & 0xf0
+
         if command not in COMMAND_BYTES:
             # basically if it's 0
             # TODO probably return some sort of packet_response class
@@ -145,6 +152,7 @@ class PacketHandler:
 
     def handle_publish(self):
         print(f'Handling publish for: {self.packet}')
+        print('')
 
     def handle_suback(self):
         # Receive the data (this could be more dynamic based on the packet size)
