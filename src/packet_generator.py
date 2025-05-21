@@ -83,7 +83,7 @@ class PacketGenerator:
         # TODO list of topics
         # TODO qos selection
         encoded_topic = self._encode_string_with_length(topic)
-        encoded_topic.append(0x00)
+        encoded_topic += bytes([0x00])
 
         # TODO generate packet_id
         packet_id = bytes([0x00, 0x01])
@@ -93,4 +93,4 @@ class PacketGenerator:
 
         packet_type_flag = bytes([SUBSCRIBE_COMMAND_BYTE])
 
-        return packet_type_flag + remaining_length + encoded_topic
+        return packet_type_flag + remaining_length + packet_id + encoded_topic

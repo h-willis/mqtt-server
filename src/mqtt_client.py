@@ -59,15 +59,12 @@ class MQTTClient:
         # self.ping_thread = threading.Thread(target=self.ping_manager)
         # self.ping_thread.start()
 
-    def subscribe(self):
+    def subscribe(self, topic):
+        print(f'Subscribing to {topic}')
         # TODO this should add subscritions to a list to subscribe to on connect
         # OR specify that subscriptions should go in the  on_connect method
-        sleep(1)
-        # GPT generated for testing
-        # TODO generate subscribe packet
-        # mqtt_subscribe_packet = b'\x82\x07\x00\x01\x00\x02a/\x00'  # Subscribe to "a/"
-        mqtt_subscribe_packet = PacketGenerator().create_subscribe_packet("a/")
-
+        mqtt_subscribe_packet = PacketGenerator().create_subscribe_packet(topic)
+        print(mqtt_subscribe_packet)
         self.conn.sendall(mqtt_subscribe_packet)
 
     def publish(self, topic=None, payload=None):
@@ -117,6 +114,7 @@ if __name__ == '__main__':
 
     client.on_message = message_handler
     client.connect()
+    client.subscribe('a/')
     client.start_loop()
 
     while True:
