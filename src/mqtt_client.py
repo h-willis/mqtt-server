@@ -22,6 +22,7 @@ class MQTTClient:
         self.on_message = None
         # keepalive duration
         self.ping_thread = None
+        self.loop_thread = None
 
     def generate_random_client_id(self):
         return 'PYMQTTClient-'.join(random.choices(string.ascii_letters + string.digits, k=8))
@@ -55,13 +56,17 @@ class MQTTClient:
             print(f'Couldnt connect {response.reason}')
             return
 
-        self.ping_thread = threading.Thread(target=self.ping_manager)
-        self.ping_thread.start()
+        # TODO ping threading as optional start
+        # self.ping_thread = threading.Thread(target=self.ping_manager)
+        # self.ping_thread.start()
 
+        # TODO bring these outside
         self.subscribe()
         self.publish(topic="b/", payload='b_test')
 
     def subscribe(self):
+        # TODO this should add subscritions to a list to subscribe to on connect
+        # OR specify that subscriptions should go in the  on_connect method
         sleep(1)
         # GPT generated for testing
         # TODO generate subscribe packet
@@ -86,6 +91,10 @@ class MQTTClient:
         ping_packet = b'\xc0\x00'  # MQTT PINGREQ
         self.conn.sendall(ping_packet)
 
+    def start_loop(self):
+        self.loop_thread = threading.Thread(target=self.loop)
+        self.loop_thread.start()
+
     def loop(self):
         print('Entering loop')
         while True:
@@ -94,9 +103,10 @@ class MQTTClient:
             if not data:
                 print(f'{self.client_id} Disconnected')
                 return
+
             print(f'recv {data}')
             response = PacketHandler(data).handle_packet()
-            # TODO link to on_message method here
+
             print(response)
             if (response.command == 0x30):
                 if self.on_message:
@@ -111,4 +121,8 @@ if __name__ == '__main__':
 
     client.on_message = message_handler
     client.connect()
-    client.loop()
+    client.start_loop()
+
+    while True:
+        print('we still here...')
+        sleep(1)

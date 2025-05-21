@@ -148,7 +148,7 @@ class PacketHandler:
         if response_flags != 0:
             print(f"Response flags: {response_flags}")
 
-        return PacketResponse(command=0x20, success=True)
+        return PacketResponse(command=0x20, success=success)
 
     def handle_publish(self):
         print(f'Handling publish for: {self.packet}')
