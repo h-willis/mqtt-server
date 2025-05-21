@@ -98,9 +98,17 @@ class MQTTClient:
             response = PacketHandler(data).handle_packet()
             # TODO link to on_message method here
             print(response)
+            if (response.command == 0x30):
+                if self.on_message:
+                    self.on_message()
 
 
 if __name__ == '__main__':
     client = MQTTClient('localhost', 1883, 'PYMQTTClient-00000000')
+
+    def message_handler():
+        print('On message called')
+
+    client.on_message = message_handler
     client.connect()
     client.loop()

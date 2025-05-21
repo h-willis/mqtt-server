@@ -153,6 +153,7 @@ class PacketHandler:
     def handle_publish(self):
         print(f'Handling publish for: {self.packet}')
         print('')
+        return PacketResponse(command=0x30)
 
     def handle_suback(self):
         # Receive the data (this could be more dynamic based on the packet size)
@@ -202,6 +203,8 @@ class PacketHandler:
     def handle_pingresp(self):
         print(f'Handling pingresp for {self.packet}')
         print("TODO somehow use this for the client to know when it's connection is dead")
+        # TODO get rid of all magic command bytes
+        return PacketResponse(command=0xD0)
 
     def handler_not_implemented(self):
         print(f'HANDLER NOT IMPLEMENTED')
