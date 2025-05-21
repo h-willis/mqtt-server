@@ -2,6 +2,11 @@
 Handles creation of mqtt packets to be sent including encoding length
 """
 
+CONNECT_COMMAND_BYTE = 0x10
+PUBLISH_COMMAND_BYTE = 0x30
+# lower nibble MUST be 2
+SUBSCRIBE_COMMAND_BYTE = 0x82
+
 
 class PacketGenerator:
     def __init__(self):
@@ -55,7 +60,7 @@ class PacketGenerator:
         # TODO check client_id
         payload = self._encode_string_with_length(client_id)
 
-        packet_type_flag = bytes([0x10])  # connect packet flag
+        packet_type_flag = bytes([CONNECT_COMMAND_BYTE])  # connect packet flag
         remaining_length = self._encode_remaining_length(
             len(variable_header) + len(payload))
 
@@ -70,6 +75,22 @@ class PacketGenerator:
         remaining_length = self._encode_remaining_length(
             len(encoded_topic) + len(encoded_payload))
 
-        packet_type_flag = bytes([0x30])  # publish byte
+        packet_type_flag = bytes([PUBLISH_COMMAND_BYTE])
 
         return packet_type_flag + remaining_length + encoded_topic + encoded_payload
+
+    def create_subscribe_packet(self, topic, qos=0):
+        # TODO list of topics
+        # TODO qos selection
+        encoded_topic = self._encode_string_with_length(topic)
+        encoded_topic.append(0x00)
+
+        # TODO generate packet_id
+        packet_id = bytes([0x00, 0x01])
+
+        remaining_length = self._encode_remaining_length(
+            len(packet_id) + len(encoded_topic))
+
+        packet_type_flag = bytes([SUBSCRIBE_COMMAND_BYTE])
+
+        return packet_type_flag + remaining_length + encoded_topic

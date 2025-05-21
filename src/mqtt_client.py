@@ -7,6 +7,8 @@ import threading
 from packet_handler import PacketHandler
 from packet_generator import PacketGenerator
 
+# TODO handle shutdown gracefully and kill threads
+
 
 class MQTTClient:
     def __init__(self, address, port, client_id=None, keep_alive=60):
@@ -14,15 +16,15 @@ class MQTTClient:
         self.port = port
         self.keep_alive = keep_alive
         self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.client_id = client_id if client_id is not None else self.generate_random_client_id()
+        self.client_id = client_id if client_id else self.generate_random_client_id()
         # callback funcs
         self.on_connect = None
         # TODO link to disconnect on disconnect
         self.on_disconnect = None
         self.on_message = None
-        # keepalive duration
-        self.ping_thread = None
-        self.loop_thread = None
+        # internals
+        self._ping_thread = None
+        self._loop_thread = None
 
     def generate_random_client_id(self):
         return 'PYMQTTClient-'.join(random.choices(string.ascii_letters + string.digits, k=8))
@@ -30,7 +32,6 @@ class MQTTClient:
     def connect(self):
         try:
             self.conn.connect((self.address, self.port))
-            # self.conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         except ConnectionRefusedError:
             print("Couldn't connect to server")
             return
@@ -38,13 +39,11 @@ class MQTTClient:
         print(
             f'Client: {self.client_id} connected to {self.address}:{self.port}')
 
-        # GPT generated for testing
-        # TODO generate connection packet
-        connect_packet = PacketGenerator().create_connect_packet(
-            client_id='PYMQTTClient-00000000')
+        connect_packet = PacketGenerator().create_connect_packet(client_id=self.client_id)
 
         self.conn.sendall(connect_packet)
         print('connection packet sent')
+
         data = self.conn.recv(4)
         handler = PacketHandler(data)
         response = handler.handle_packet()
@@ -60,17 +59,14 @@ class MQTTClient:
         # self.ping_thread = threading.Thread(target=self.ping_manager)
         # self.ping_thread.start()
 
-        # TODO bring these outside
-        self.subscribe()
-        self.publish(topic="b/", payload='b_test')
-
     def subscribe(self):
         # TODO this should add subscritions to a list to subscribe to on connect
         # OR specify that subscriptions should go in the  on_connect method
         sleep(1)
         # GPT generated for testing
         # TODO generate subscribe packet
-        mqtt_subscribe_packet = b'\x82\x07\x00\x01\x00\x02a/\x00'  # Subscribe to "a/"
+        # mqtt_subscribe_packet = b'\x82\x07\x00\x01\x00\x02a/\x00'  # Subscribe to "a/"
+        mqtt_subscribe_packet = PacketGenerator().create_subscribe_packet("a/")
 
         self.conn.sendall(mqtt_subscribe_packet)
 
@@ -92,8 +88,8 @@ class MQTTClient:
         self.conn.sendall(ping_packet)
 
     def start_loop(self):
-        self.loop_thread = threading.Thread(target=self.loop)
-        self.loop_thread.start()
+        self._loop_thread = threading.Thread(target=self.loop)
+        self._loop_thread.start()
 
     def loop(self):
         print('Entering loop')
