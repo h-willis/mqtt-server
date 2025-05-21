@@ -5,6 +5,7 @@ from time import sleep
 import threading
 
 from packet_handler import PacketHandler
+from packet_generator import PacketGenerator
 
 
 class MQTTClient:
@@ -38,8 +39,10 @@ class MQTTClient:
 
         # GPT generated for testing
         # TODO generate connection packet
-        connect_packet = bytearray(
-            b'\x10\x21\x00\x04MQTT\x04\x02\x00<\x00\x15PYMQTTClient-00000000')
+        connect_packet = PacketGenerator().create_connect_packet(
+            client_id='PYMQTTClient-00000000')
+        # connect_packet = bytearray(
+        #     b'\x10\x21\x00\x04MQTT\x04\x02\x00<\x00\x15PYMQTTClient-00000000')
 
         self.conn.sendall(connect_packet)
         print('connection packet sent')
