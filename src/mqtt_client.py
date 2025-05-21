@@ -41,8 +41,6 @@ class MQTTClient:
         # TODO generate connection packet
         connect_packet = PacketGenerator().create_connect_packet(
             client_id='PYMQTTClient-00000000')
-        # connect_packet = bytearray(
-        #     b'\x10\x21\x00\x04MQTT\x04\x02\x00<\x00\x15PYMQTTClient-00000000')
 
         self.conn.sendall(connect_packet)
         print('connection packet sent')
@@ -61,7 +59,7 @@ class MQTTClient:
         self.ping_thread.start()
 
         self.subscribe()
-        self.publish()
+        self.publish(topic="b/", payload='b_test')
 
     def subscribe(self):
         sleep(1)
@@ -72,8 +70,7 @@ class MQTTClient:
         self.conn.sendall(mqtt_subscribe_packet)
 
     def publish(self, topic=None, payload=None):
-        pub_packet = bytearray(
-            b'\x30\x0a\x00\x02b/b_test')
+        pub_packet = PacketGenerator().create_publish_packet(topic, payload)
 
         self.conn.sendall(pub_packet)
 

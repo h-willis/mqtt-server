@@ -197,7 +197,6 @@ class PacketHandler:
                 break
 
         # Optionally handle additional scenarios if needed
-
         return PacketResponse(command=0x90, success=True)
 
     def handle_pingresp(self):

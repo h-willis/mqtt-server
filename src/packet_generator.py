@@ -60,3 +60,16 @@ class PacketGenerator:
             len(variable_header) + len(payload))
 
         return packet_type_flag + remaining_length + variable_header + payload
+
+    def create_publish_packet(self, topic, payload):
+        # TODO flags (DUP, QoS, RET)
+        encoded_topic = self._encode_string_with_length(topic)
+        # TODO encode numbers
+        encoded_payload = payload.encode('utf-8')
+
+        remaining_length = self._encode_remaining_length(
+            len(encoded_topic) + len(encoded_payload))
+
+        packet_type_flag = bytes([0x30])  # publish byte
+
+        return packet_type_flag + remaining_length + encoded_topic + encoded_payload
