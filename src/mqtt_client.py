@@ -18,22 +18,13 @@ class MQTTClient:
         self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client_id = client_id if client_id else self.generate_random_client_id()
         # callback funcs
-        self.on_connect = self._on_connect
+        self.on_connect = lambda: None
         # TODO link to disconnect on disconnect
-        self.on_disconnect = self._on_disconnect
-        self.on_message = self._on_message
+        self.on_disconnect = lambda: None
+        self.on_message = lambda: None
         # internals
         self._ping_thread = None
         self._loop_thread = None
-
-    def _on_connect(self):
-        pass
-
-    def _on_disconnect(self):
-        pass
-
-    def _on_message(self):
-        pass
 
     def generate_random_client_id(self):
         return 'PYMQTTClient-'.join(random.choices(string.ascii_letters + string.digits, k=8))
@@ -61,6 +52,7 @@ class MQTTClient:
         if response.success:
             # TODO link to on_connect method here
             print('We connected')
+            self.on_connect()
         else:
             print(f'Couldnt connect {response.reason}')
             return
@@ -113,6 +105,7 @@ class MQTTClient:
 
     def handle_response(self, response):
         print(f'Handling response: {response}')
+
         if not response.success:
             print(f'Not successful')
             return
@@ -129,7 +122,7 @@ if __name__ == '__main__':
 
     client.on_message = message_handler
     client.connect()
-    client.subscribe('a/')
+    # client.subscribe('a/')
     client.subscribe('test/')
     client.start_loop()
 
