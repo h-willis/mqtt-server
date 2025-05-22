@@ -18,18 +18,28 @@ class MQTTClient:
         self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client_id = client_id if client_id else self.generate_random_client_id()
         # callback funcs
-        self.on_connect = None
+        self.on_connect = self._on_connect
         # TODO link to disconnect on disconnect
-        self.on_disconnect = None
-        self.on_message = None
+        self.on_disconnect = self._on_disconnect
+        self.on_message = self._on_message
         # internals
         self._ping_thread = None
         self._loop_thread = None
+
+    def _on_connect(self):
+        pass
+
+    def _on_disconnect(self):
+        pass
+
+    def _on_message(self):
+        pass
 
     def generate_random_client_id(self):
         return 'PYMQTTClient-'.join(random.choices(string.ascii_letters + string.digits, k=8))
 
     def connect(self):
+        # TODO handle non connection
         try:
             self.conn.connect((self.address, self.port))
         except ConnectionRefusedError:
@@ -99,11 +109,16 @@ class MQTTClient:
 
             print(f'recv {data}')
             response = PacketHandler(data).handle_packet()
+            self.handle_response(response)
 
-            print(response)
-            if (response.command == 0x30):
-                if self.on_message:
-                    self.on_message()
+    def handle_response(self, response):
+        print(f'Handling response: {response}')
+        if not response.success:
+            print(f'Not successful')
+            return
+
+        if response.command == 0x30:
+            self.on_message()
 
 
 if __name__ == '__main__':
@@ -115,8 +130,15 @@ if __name__ == '__main__':
     client.on_message = message_handler
     client.connect()
     client.subscribe('a/')
+    client.subscribe('test/')
     client.start_loop()
+
+    publish_idx = 0
 
     while True:
         print('we still here...')
         sleep(1)
+        publish_idx += 1
+        if publish_idx == 10:
+            client.publish('test/', 'test payload')
+            publish_idx = 0

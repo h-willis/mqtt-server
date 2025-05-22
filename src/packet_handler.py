@@ -48,12 +48,15 @@ COMMAND_BYTES = {
 }
 
 
-class PacketResponse:
-    def __init__(self, command, success=False, reason=None, response=None):
+class HandlerResponse:
+    def __init__(self, command, success=True, reason=None, response=None):
         self.command = command
         self.success = success
         self.reason = reason
         self.response = response
+
+    def __str__(self):
+        return f'{hex(self.command)} | {self.success} | {self.reason} | {self.response}'
 
 
 class PacketHandler:
@@ -74,13 +77,13 @@ class PacketHandler:
             0xC0: self.handler_not_implemented,  # "PINGREQ"
             0xD0: self.handle_pingresp,  # "PINGRESP"
             0xE0: self.handler_not_implemented,  # "DISCONNECT"
-            0xF0: self.handler_not_implemented,  # "AUTH
+            0xF0: self.handler_not_implemented,  # "AUTH"
         }
 
     def handle_packet(self):
         # just look at top 4 bytes
         if not self.packet:
-            return PacketResponse(False, 'No Packet')
+            return HandlerResponse(False, 'No Packet')
         command = self.packet[0] & 0xf0
 
         if command not in COMMAND_BYTES:
@@ -148,12 +151,12 @@ class PacketHandler:
         if response_flags != 0:
             print(f"Response flags: {response_flags}")
 
-        return PacketResponse(command=0x20, success=success)
+        return HandlerResponse(command=0x20, success=success)
 
     def handle_publish(self):
         print(f'Handling publish for: {self.packet}')
         print('')
-        return PacketResponse(command=0x30)
+        return HandlerResponse(command=0x30)
 
     def handle_suback(self):
         # Receive the data (this could be more dynamic based on the packet size)
@@ -198,14 +201,14 @@ class PacketHandler:
                 break
 
         # Optionally handle additional scenarios if needed
-        return PacketResponse(command=0x90, success=True)
+        return HandlerResponse(command=0x90, success=True)
 
     def handle_pingresp(self):
         print(f'Handling pingresp for {self.packet}')
         print("TODO somehow use this for the client to know when it's connection is dead")
         # TODO get rid of all magic command bytes
-        return PacketResponse(command=0xD0)
+        return HandlerResponse(command=0xD0)
 
     def handler_not_implemented(self):
         print(f'HANDLER NOT IMPLEMENTED')
-        return PacketResponse(0x00, success=False, reason='Not implemented')
+        return HandlerResponse(0x00, success=False, reason='Not implemented')
