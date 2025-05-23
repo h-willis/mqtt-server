@@ -1,11 +1,8 @@
+import packets
+
 """
 Handles creation of mqtt packets to be sent including encoding length
 """
-
-CONNECT_COMMAND_BYTE = 0x10
-PUBLISH_COMMAND_BYTE = 0x30
-# lower nibble MUST be 2
-SUBSCRIBE_COMMAND_BYTE = 0x82
 
 
 class PacketGenerator:
@@ -60,7 +57,7 @@ class PacketGenerator:
         # TODO check client_id
         payload = self._encode_string_with_length(client_id)
 
-        packet_type_flag = bytes([CONNECT_COMMAND_BYTE])  # connect packet flag
+        packet_type_flag = bytes([packets.CONNECT_BYTE])  # connect packet flag
         remaining_length = self._encode_remaining_length(
             len(variable_header) + len(payload))
 
@@ -75,7 +72,7 @@ class PacketGenerator:
         remaining_length = self._encode_remaining_length(
             len(encoded_topic) + len(encoded_payload))
 
-        packet_type_flag = bytes([PUBLISH_COMMAND_BYTE])
+        packet_type_flag = bytes([packets.PUBLISH_BYTE])
 
         return packet_type_flag + remaining_length + encoded_topic + encoded_payload
 
@@ -91,6 +88,7 @@ class PacketGenerator:
         remaining_length = self._encode_remaining_length(
             len(packet_id) + len(encoded_topic))
 
-        packet_type_flag = bytes([SUBSCRIBE_COMMAND_BYTE])
+        # lower nibble must be 2
+        packet_type_flag = bytes([packets.SUBSCRIBE_BYTE & 0xf2])
 
         return packet_type_flag + remaining_length + packet_id + encoded_topic

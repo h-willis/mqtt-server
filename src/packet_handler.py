@@ -1,6 +1,7 @@
 # handlers for each of the expected MQTT packets:
+import packets
 
-'''
+"""
 1	    CONNECT	        Client request to connect to a broker.
 2	    CONNACK	        Connection acknowledgment from the broker.
 3	    PUBLISH	        Message sent from a client to a topic.
@@ -16,7 +17,7 @@
 13	    PINGRESP	    Response to a keep - alive request.
 14	    DISCONNECT	    Notification that a client is disconnecting.
 15	    AUTH(MQTT 5.0)	Used for enhanced authentication in MQTT 5.
-'''
+"""
 
 # does this send responses or return a response to send?
 # could be if it returns something from a handle_packet then it needs to be sent
@@ -63,33 +64,34 @@ class PacketHandler:
     def __init__(self, packet):
         self.packet = packet
         self.handlers = {
-            0x10: self.handler_not_implemented,  # "CONNECT"
-            0x20: self.handle_connack,  # "CONNACK"
-            0x30: self.handle_publish,  # "PUBLISH"
-            0x40: self.handler_not_implemented,  # "PUBACK"
-            0x50: self.handler_not_implemented,  # "PUBREC"
-            0x60: self.handler_not_implemented,  # "PUBREL"
-            0x70: self.handler_not_implemented,  # "PUBCOMP"
-            0x80: self.handler_not_implemented,  # "SUBSCRIBE"
-            0x90: self.handle_suback,  # "SUBACK"
-            0xA0: self.handler_not_implemented,  # "UNSUBSCRIBE"
-            0xB0: self.handler_not_implemented,  # "UNSUBACK"
-            0xC0: self.handler_not_implemented,  # "PINGREQ"
-            0xD0: self.handle_pingresp,  # "PINGRESP"
-            0xE0: self.handler_not_implemented,  # "DISCONNECT"
-            0xF0: self.handler_not_implemented,  # "AUTH"
+            packets.CONNECT_BYTE: self.handler_not_implemented,     # "CONNECT"
+            packets.CONNACK_BYTE: self.handle_connack,              # "CONNACK"
+            packets.PUBLISH_BYTE: self.handle_publish,              # "PUBLISH"
+            packets.PUBACK_BYTE: self.handler_not_implemented,      # "PUBACK"
+            packets.PUBREC_BYTE: self.handler_not_implemented,      # "PUBREC"
+            packets.PUBREL_BYTE: self.handler_not_implemented,      # "PUBREL"
+            packets.PUBCOMP_BYTE: self.handler_not_implemented,     # "PUBCOMP"
+            packets.SUBSCRIBE_BYTE: self.handler_not_implemented,   # "SUBSCRIBE"
+            packets.SUBACK_BYTE: self.handle_suback,                # "SUBACK"
+            packets.UNSUBSCRIBE_BYTE: self.handler_not_implemented,  # "UNSUBSCRIBE"
+            packets.UNSUBACK_BYTE: self.handler_not_implemented,    # "UNSUBACK"
+            packets.PINGREQ_BYTE: self.handler_not_implemented,     # "PINGREQ"
+            packets.PINGRESP_BYTE: self.handle_pingresp,            # "PINGRESP"
+            packets.DISCONNECT_BYTE: self.handler_not_implemented,  # "DISCONNECT"
+            packets.AUTH_BYTE: self.handler_not_implemented,        # "AUTH"
         }
 
     def handle_packet(self):
         # just look at top 4 bytes
         if not self.packet:
             return HandlerResponse(False, 'No Packet')
+
         command = self.packet[0] & 0xf0
 
         if command not in COMMAND_BYTES:
             # basically if it's 0
             # TODO probably return some sort of packet_response class
-            return False
+            return HandlerResponse(False, 'Invalid command byte')
 
         print(f'{COMMAND_BYTES[command]} packet recieved')
 
@@ -155,8 +157,7 @@ class PacketHandler:
 
     def handle_publish(self):
         print(f'Handling publish for: {self.packet}')
-        print('')
-        return HandlerResponse(command=0x30)
+        return HandlerResponse(command=packets.PUBLISH_BYTE)
 
     def handle_suback(self):
         # Receive the data (this could be more dynamic based on the packet size)
@@ -201,13 +202,12 @@ class PacketHandler:
                 break
 
         # Optionally handle additional scenarios if needed
-        return HandlerResponse(command=0x90, success=True)
+        return HandlerResponse(command=packets.SUBACK_BYTE, success=True)
 
     def handle_pingresp(self):
         print(f'Handling pingresp for {self.packet}')
         print("TODO somehow use this for the client to know when it's connection is dead")
-        # TODO get rid of all magic command bytes
-        return HandlerResponse(command=0xD0)
+        return HandlerResponse(command=packets.PINGRESP_BYTE)
 
     def handler_not_implemented(self):
         print(f'HANDLER NOT IMPLEMENTED')

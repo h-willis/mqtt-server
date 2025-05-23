@@ -4,6 +4,7 @@ import string
 from time import sleep
 import threading
 
+import packets
 from packet_handler import PacketHandler
 from packet_generator import PacketGenerator
 
@@ -19,7 +20,6 @@ class MQTTClient:
         self.client_id = client_id if client_id else self.generate_random_client_id()
         # callback funcs
         self.on_connect = lambda: None
-        # TODO link to disconnect on disconnect
         self.on_disconnect = lambda: None
         self.on_message = lambda: None
         # internals
@@ -29,8 +29,11 @@ class MQTTClient:
     def generate_random_client_id(self):
         return 'PYMQTTClient-'.join(random.choices(string.ascii_letters + string.digits, k=8))
 
-    def connect(self):
-        # TODO handle non connection
+    def connect(self, timeout=None):
+        """ Blocking method that attempts to connect to the server.
+        Optional timeout 
+        """
+
         try:
             self.conn.connect((self.address, self.port))
         except ConnectionRefusedError:
@@ -46,11 +49,9 @@ class MQTTClient:
         print('connection packet sent')
 
         data = self.conn.recv(4)
-        handler = PacketHandler(data)
-        response = handler.handle_packet()
+        response = PacketHandler(data).handle_packet()
 
         if response.success:
-            # TODO link to on_connect method here
             print('We connected')
             self.on_connect()
         else:
@@ -97,6 +98,7 @@ class MQTTClient:
             data = self.conn.recv(1024)
             if not data:
                 print(f'{self.client_id} Disconnected')
+                self.on_disconnect()
                 return
 
             print(f'recv {data}')
@@ -107,10 +109,10 @@ class MQTTClient:
         print(f'Handling response: {response}')
 
         if not response.success:
-            print(f'Not successful')
+            print(f'Not successful {response.reason}')
             return
 
-        if response.command == 0x30:
+        if response.command == packets.CONNACK_BYTE:
             self.on_message()
 
 
