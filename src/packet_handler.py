@@ -50,11 +50,16 @@ COMMAND_BYTES = {
 
 
 class HandlerResponse:
-    def __init__(self, command, success=True, reason=None, response=None):
+    def __init__(self, command, success=True, reason=None, response=None, data={}):
         self.command = command
         self.success = success
+        # reason for failures for logging
         self.reason = reason
+        # for qos > 1
         self.response = response
+        # topics and payloads?
+        # TODO see if there's a better way of returning this
+        self.data = data
 
     def __str__(self):
         return f'{hex(self.command)} | {self.success} | {self.reason} | {self.response}'
@@ -157,7 +162,26 @@ class PacketHandler:
 
     def handle_publish(self):
         print(f'Handling publish for: {self.packet}')
-        return HandlerResponse(command=packets.PUBLISH_BYTE)
+
+        # MQTT Fixed header: byte 1 = control byte, byte 2+ = remaining length
+        fixed_header = self.packet[0]
+        remaining_length = self.packet[1]
+
+        # Start of variable header: Topic name (2-byte length + UTF-8 string)
+        topic_length = int.from_bytes(self.packet[2:4], byteorder='big')
+        topic_start = 4
+        topic_end = topic_start + topic_length
+        topic = self.packet[topic_start:topic_end].decode('utf-8')
+
+        # Payload starts immediately after topic (and maybe packet identifier if QoS > 0)
+        payload_start = topic_end
+        payload = self.packet[payload_start:].decode('utf-8')
+
+        print(f'Topic: {topic}, Payload: {payload}')
+
+        # Optionally store or forward this message, depending on your broker logic
+
+        return HandlerResponse(packets.PUBLISH_BYTE, data={'topic': topic, 'payload': payload})
 
     def handle_suback(self):
         # Receive the data (this could be more dynamic based on the packet size)

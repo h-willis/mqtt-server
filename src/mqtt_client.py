@@ -48,6 +48,7 @@ class MQTTClient:
         self.conn.sendall(connect_packet)
         print('connection packet sent')
 
+        # TODO timeout and error handling
         data = self.conn.recv(4)
         response = PacketHandler(data).handle_packet()
 
@@ -127,7 +128,6 @@ if __name__ == '__main__':
 
     client.on_message = message_handler
     client.connect()
-    # client.subscribe('a/')
     client.subscribe('test/')
     client.start_loop()
 
@@ -137,6 +137,10 @@ if __name__ == '__main__':
         print('we still here...')
         sleep(1)
         publish_idx += 1
-        if publish_idx == 10:
+        if publish_idx == 3:
             client.publish('test/', 'test payload')
+        if publish_idx == 6:
+            client.publish('test/', 1)
+        if publish_idx == 9:
+            client.publish(1, 1)
             publish_idx = 0

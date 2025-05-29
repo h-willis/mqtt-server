@@ -15,7 +15,7 @@ class PacketGenerator:
         Args:
             s: string to be encoded
         """
-        byte_string = s.encode('utf-8')
+        byte_string = str(s).encode('utf-8')
         return len(byte_string).to_bytes(2, 'big') + byte_string
 
     def _encode_remaining_length(self, length):
@@ -66,11 +66,13 @@ class PacketGenerator:
     def create_publish_packet(self, topic, payload):
         # TODO flags (DUP, QoS, RET)
         encoded_topic = self._encode_string_with_length(topic)
-        # TODO encode numbers
-        encoded_payload = payload.encode('utf-8')
+
+        # NOTE could add config here to allow for numbers encoded as bytes
+        encoded_payload = str(payload).encode('utf-8')
+        payload_length = len(encoded_payload)
 
         remaining_length = self._encode_remaining_length(
-            len(encoded_topic) + len(encoded_payload))
+            len(encoded_topic) + payload_length)
 
         packet_type_flag = bytes([packets.PUBLISH_BYTE])
 
@@ -88,7 +90,7 @@ class PacketGenerator:
         remaining_length = self._encode_remaining_length(
             len(packet_id) + len(encoded_topic))
 
-        # lower nibble must be 2
+        # lower nibble must be 2 on subscribe command bytes
         packet_type_flag = bytes([packets.SUBSCRIBE_BYTE & 0xf2])
 
         return packet_type_flag + remaining_length + packet_id + encoded_topic
