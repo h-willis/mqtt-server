@@ -62,7 +62,7 @@ class HandlerResponse:
         self.data = data
 
     def __str__(self):
-        return f'{hex(self.command)} | {self.success} | {self.reason} | {self.response}'
+        return f'{COMMAND_BYTES[self.command]} | {self.success} | {self.reason} | {self.response}'
 
 
 class PacketHandler:

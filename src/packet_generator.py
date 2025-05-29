@@ -64,6 +64,7 @@ class PacketGenerator:
         return packet_type_flag + remaining_length + variable_header + payload
 
     def create_publish_packet(self, topic, payload):
+        print(f'Publishing {payload} to {topic}')
         # TODO flags (DUP, QoS, RET)
         encoded_topic = self._encode_string_with_length(topic)
 
