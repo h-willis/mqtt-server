@@ -21,7 +21,7 @@ class MQTTClient:
         # callback funcs
         self.on_connect = lambda: None
         self.on_disconnect = lambda: None
-        self.on_message = lambda: None
+        self.on_message = lambda topic, payload: None
         # internals
         self._ping_thread = None
         self._loop_thread = None
@@ -113,14 +113,17 @@ class MQTTClient:
             return
 
         if response.command == packets.CONNACK_BYTE:
-            self.on_message()
+            self.on_connect()
+        if response.command == packets.PUBLISH_BYTE:
+            self.on_message(response.data.get('topic'),
+                            response.data.get('payload'))
 
 
 if __name__ == '__main__':
     client = MQTTClient('localhost', 1883, 'PYMQTTClient-00000000')
 
-    def message_handler():
-        print('On message called')
+    def message_handler(topic, payload):
+        print(f'Message recieved {topic}: {payload}')
 
     client.on_message = message_handler
     client.connect()
