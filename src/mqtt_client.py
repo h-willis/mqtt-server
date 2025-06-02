@@ -142,12 +142,12 @@ if __name__ == '__main__':
         print(f'Message recieved {topic}: {payload}')
 
     def connect_handler():
+        client.subscribe('test/')
         client.start_loop()
 
     client.on_message = message_handler
     client.on_connect = connect_handler
     client.connect()
-    client.subscribe('test/')
 
     publish_idx = 0
 
