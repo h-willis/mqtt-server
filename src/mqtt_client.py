@@ -30,27 +30,37 @@ class MQTTClient:
     def generate_random_client_id(self):
         return 'PYMQTTClient-'.join(random.choices(string.ascii_letters + string.digits, k=8))
 
-    def connect(self, timeout=None):
+    def connect(self, timeout=0):
         """ Blocking method that attempts to connect to the server.
         Optional timeout 
         """
 
-        try:
-            self.conn.connect((self.address, self.port))
-        except ConnectionRefusedError:
-            print("Couldn't connect to server")
-            return
+        attempts = 0
+        while True:
+            try:
+                self.conn.connect((self.address, self.port))
+                break
+            except ConnectionRefusedError:
+                attempts += 1
+                if attempts > timeout:
+                    print('Failed to connect to server')
+                    return
+                sleep(1)
 
         print(
             f'Client: {self.client_id} connected to {self.address}:{self.port}')
 
         connect_packet = PacketGenerator().create_connect_packet(client_id=self.client_id)
 
+        attempts = 0
+
         self.conn.sendall(connect_packet)
         print('connection packet sent')
 
         # TODO timeout and error handling
+        self.conn.settimeout(timeout)
         data = self.conn.recv(4)
+        self.conn.settimeout(None)
         response = PacketHandler(data).handle_packet()
 
         if response.success:
@@ -59,7 +69,6 @@ class MQTTClient:
             self.on_connect()
         else:
             print(f'Couldnt connect {response.reason}')
-            return
 
         # TODO ping threading as optional start
         # self.ping_thread = threading.Thread(target=self.ping_manager)
@@ -150,7 +159,7 @@ if __name__ == '__main__':
     client.on_connect = connect_handler
     client.on_disconnect = disconnect_handler
 
-    client.connect()
+    client.connect(timeout=3)
 
     publish_idx = 0
 
