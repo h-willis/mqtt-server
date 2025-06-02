@@ -145,8 +145,13 @@ if __name__ == '__main__':
         client.subscribe('test/')
         client.start_loop()
 
+    def disconnect_handler():
+        client.connect()
+
     client.on_message = message_handler
     client.on_connect = connect_handler
+    client.on_disconnect = disconnect_handler
+
     client.connect()
 
     publish_idx = 0
@@ -154,6 +159,7 @@ if __name__ == '__main__':
     while True:
         print('we still here...')
         sleep(1)
+
         publish_idx += 1
         if publish_idx == 3:
             client.publish('test/', 'test payload')
