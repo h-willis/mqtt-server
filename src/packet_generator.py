@@ -80,6 +80,7 @@ class PacketGenerator:
         return packet_type_flag + remaining_length + encoded_topic + encoded_payload
 
     def create_subscribe_packet(self, topic, qos=0):
+        print(f'Subscribing to {topic} at QoS:{qos}')
         # TODO list of topics
         # TODO qos selection
         encoded_topic = self._encode_string_with_length(topic)
