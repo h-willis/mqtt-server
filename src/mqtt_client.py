@@ -18,6 +18,7 @@ class MQTTClient:
         self.keep_alive = keep_alive
         self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client_id = client_id if client_id else self.generate_random_client_id()
+        self.connected = False
         # callback funcs
         self.on_connect = lambda: None
         self.on_disconnect = lambda: None
@@ -54,6 +55,7 @@ class MQTTClient:
 
         if response.success:
             print('We connected')
+            self.connected = True
             self.on_connect()
         else:
             print(f'Couldnt connect {response.reason}')
@@ -64,7 +66,9 @@ class MQTTClient:
         # self.ping_thread.start()
 
     def subscribe(self, topic):
-        print(f'Subscribing to {topic}')
+        if not self.connected:
+            print(f'Cant subscribe to {topic}, not connected to server')
+            return
         # TODO this should add subscritions to a list to subscribe to on connect
         # OR specify that subscriptions should go in the  on_connect method
         mqtt_subscribe_packet = PacketGenerator().create_subscribe_packet(topic)
@@ -72,13 +76,19 @@ class MQTTClient:
         self.conn.sendall(mqtt_subscribe_packet)
 
     def publish(self, topic=None, payload=None):
+        if not self.connected:
+            print(f'Cant publish to {topic}, not connected to server')
+            return
         pub_packet = PacketGenerator().create_publish_packet(topic, payload)
 
         self.conn.sendall(pub_packet)
 
     def ping_manager(self):
+        if not self.connected:
+            return
         # TODO make this timer based which resets on every comms with server
         # (publishing or acknowloging)
+        # TODO make this config option
         while True:
             self.ping_server()
             sleep(self.keep_alive - 1)
@@ -98,8 +108,10 @@ class MQTTClient:
             # TODO read more data if this isnt long enough
             data = self.conn.recv(1024)
             if not data:
-                print(f'{self.client_id} Disconnected')
+                self.connected = False
                 self.on_disconnect()
+            if not self.connected:
+                print(f'{self.client_id} Disconnected')
                 return
 
             print(f'recv {data}')
@@ -118,6 +130,9 @@ class MQTTClient:
         if response.command == packets.PUBLISH_BYTE:
             self.on_message(response.data.get('topic'),
                             response.data.get('payload'))
+        if response.command == packets.DISCONNECT_BYTE:
+            self.connected = False
+            self.on_disconnect()
 
 
 if __name__ == '__main__':
