@@ -69,18 +69,15 @@ class MQTTClient:
         if not self.connected:
             print(f'Cant subscribe to {topic}, not connected to server')
             return
-        # TODO this should add subscritions to a list to subscribe to on connect
-        # OR specify that subscriptions should go in the  on_connect method
-        mqtt_subscribe_packet = PacketGenerator().create_subscribe_packet(topic)
-        print(mqtt_subscribe_packet)
-        self.conn.sendall(mqtt_subscribe_packet)
+
+        sub_packet = PacketGenerator().create_subscribe_packet(topic)
+        self.conn.sendall(sub_packet)
 
     def publish(self, topic=None, payload=None):
         if not self.connected:
             print(f'Cant publish to {topic}, not connected to server')
             return
         pub_packet = PacketGenerator().create_publish_packet(topic, payload)
-
         self.conn.sendall(pub_packet)
 
     def ping_manager(self):
@@ -94,7 +91,6 @@ class MQTTClient:
             sleep(self.keep_alive - 1)
 
     def ping_server(self):
-        print('pinging')
         ping_packet = b'\xc0\x00'  # MQTT PINGREQ
         self.conn.sendall(ping_packet)
 
@@ -106,6 +102,8 @@ class MQTTClient:
         print('Entering loop')
         while True:
             # TODO read more data if this isnt long enough
+            # read a bunch more until no more data, or construct the bytes-left
+            # of the packet and read that much more?
             data = self.conn.recv(1024)
             if not data:
                 self.connected = False
