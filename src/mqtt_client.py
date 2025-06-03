@@ -20,6 +20,8 @@ class MQTTClient:
         self.client_id = client_id if client_id else self.generate_random_client_id()
         self.connected = False
         # callback funcs
+        # TODO wrap these in something so any errors in user provided callbacks
+        # dont crash us
         self.on_connect = lambda: None
         self.on_disconnect = lambda: None
         self.on_message = lambda topic, payload: None
@@ -30,19 +32,31 @@ class MQTTClient:
     def generate_random_client_id(self):
         return 'PYMQTTClient-'.join(random.choices(string.ascii_letters + string.digits, k=8))
 
-    def connect(self, timeout=0):
+    def socket_connected(self):
+        try:
+            self.conn.sendall(b'')
+            return True
+        except (OSError, BrokenPipeError):
+            return False
+
+    def connect(self, timeout=1):
         """ Blocking method that attempts to connect to the server.
         Optional timeout 
         """
+        print(f'Attempting to connect to MQTT server')
 
         attempts = 0
         while True:
+            if self.socket_connected():
+                break
             try:
+                self.conn.settimeout(1)
                 self.conn.connect((self.address, self.port))
                 break
-            except ConnectionRefusedError:
+            except (ConnectionRefusedError, ConnectionAbortedError):
                 attempts += 1
                 if attempts > timeout:
+                    # TODO more information about failure here
                     print('Failed to connect to server')
                     return
                 sleep(1)
@@ -54,21 +68,27 @@ class MQTTClient:
 
         attempts = 0
 
-        self.conn.sendall(connect_packet)
-        print('connection packet sent')
+        try:
+            self.conn.sendall(connect_packet)
+            print('Connection packet sent, waiting for response...', end='')
 
-        # TODO timeout and error handling
-        self.conn.settimeout(timeout)
-        data = self.conn.recv(4)
-        self.conn.settimeout(None)
+            # TODO timeout and error handling
+            self.conn.settimeout(timeout)
+            data = self.conn.recv(4)
+        except TimeoutError:
+            print('No response from server.')
+            return
+        finally:
+            self.conn.settimeout(None)
+
         response = PacketHandler(data).handle_packet()
 
         if response.success:
-            print('We connected')
+            print('We connected!')
             self.connected = True
             self.on_connect()
         else:
-            print(f'Couldnt connect {response.reason}')
+            print(f'Connection refused {response.reason}')
 
         # TODO ping threading as optional start
         # self.ping_thread = threading.Thread(target=self.ping_manager)
@@ -159,7 +179,8 @@ if __name__ == '__main__':
     client.on_connect = connect_handler
     client.on_disconnect = disconnect_handler
 
-    client.connect(timeout=3)
+    while not client.connected:
+        client.connect(timeout=3)
 
     publish_idx = 0
 
