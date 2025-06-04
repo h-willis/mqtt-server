@@ -42,9 +42,34 @@ class MQTTClient:
     def connect(self, timeout=1):
         """ Blocking method that attempts to connect to the server.
         Optional timeout 
+        TODO optional timeout
         """
-        print(f'Attempting to connect to MQTT server')
+        print('Attempting to connect to MQTT server')
 
+        if not self.connect_socket_to_server(timeout):
+            print('Failed to connect to server')
+            return
+
+        print(
+            f'Client: {self.client_id} connected to {self.address}:{self.port}')
+
+        server_response = self.negotiate_connection_to_server(timeout)
+
+        response = PacketHandler(server_response).handle_packet()
+
+        if response.success:
+            print('We connected!')
+            self.connected = True
+            self.on_connect()
+        else:
+            print(f'Connection refused {response.reason}')
+            self.connected = False
+
+        # TODO ping threading as optional start
+        # self.ping_thread = threading.Thread(target=self.ping_manager)
+        # self.ping_thread.start()
+
+    def connect_socket_to_server(self, timeout):
         attempts = 0
         while True:
             if self.socket_connected():
@@ -52,27 +77,24 @@ class MQTTClient:
             try:
                 self.conn.settimeout(1)
                 self.conn.connect((self.address, self.port))
-                break
+                return True
             except (ConnectionRefusedError, ConnectionAbortedError):
                 attempts += 1
                 if attempts > timeout:
                     # TODO more information about failure here
-                    print('Failed to connect to server')
-                    return
+                    return False
                 sleep(1)
+            finally:
+                self.conn.settimeout(None)
 
-        print(
-            f'Client: {self.client_id} connected to {self.address}:{self.port}')
-
+    def negotiate_connection_to_server(self, timeout):
         connect_packet = PacketGenerator().create_connect_packet(client_id=self.client_id)
-
-        attempts = 0
+        data = None
 
         try:
             self.conn.sendall(connect_packet)
             print('Connection packet sent, waiting for response...', end='')
 
-            # TODO timeout and error handling
             self.conn.settimeout(timeout)
             data = self.conn.recv(4)
         except TimeoutError:
@@ -81,18 +103,7 @@ class MQTTClient:
         finally:
             self.conn.settimeout(None)
 
-        response = PacketHandler(data).handle_packet()
-
-        if response.success:
-            print('We connected!')
-            self.connected = True
-            self.on_connect()
-        else:
-            print(f'Connection refused {response.reason}')
-
-        # TODO ping threading as optional start
-        # self.ping_thread = threading.Thread(target=self.ping_manager)
-        # self.ping_thread.start()
+        return data
 
     def subscribe(self, topic):
         if not self.connected:
