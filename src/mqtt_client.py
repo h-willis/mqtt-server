@@ -32,6 +32,27 @@ class MQTTClient:
     def generate_random_client_id(self):
         return 'PYMQTTClient-'.join(random.choices(string.ascii_letters + string.digits, k=8))
 
+    def call_on_connect(self):
+        try:
+            self.on_connect()
+        except Exception as e:
+            print(f'Error while calling on_connect callback:')
+            print(e)
+
+    def call_on_disconnect(self):
+        try:
+            self.on_disconnect()
+        except Exception as e:
+            print('Error while calling on_disconnect callback:')
+            print(e)
+
+    def call_on_message(self, topic=None, payload=None):
+        try:
+            self.on_message(topic, payload)
+        except Exception as e:
+            print('Error while calling on_message callback:')
+            print({e})
+
     def socket_connected(self):
         try:
             self.conn.sendall(b'')
@@ -47,6 +68,7 @@ class MQTTClient:
         print('Attempting to connect to MQTT server')
 
         if not self.connect_socket_to_server(timeout):
+            self.connected = False
             print('Failed to connect to server')
             return
 
@@ -60,7 +82,7 @@ class MQTTClient:
         if response.success:
             print('We connected!')
             self.connected = True
-            self.on_connect()
+            self.call_on_connect()
         else:
             print(f'Connection refused {response.reason}')
             self.connected = False
@@ -117,6 +139,7 @@ class MQTTClient:
         if not self.connected:
             print(f'Cant publish to {topic}, not connected to server')
             return
+
         pub_packet = PacketGenerator().create_publish_packet(topic, payload)
         self.conn.sendall(pub_packet)
 
@@ -147,7 +170,7 @@ class MQTTClient:
             data = self.conn.recv(1024)
             if not data:
                 self.connected = False
-                self.on_disconnect()
+                self.call_on_disconnect()
             if not self.connected:
                 print(f'{self.client_id} Disconnected')
                 return
@@ -164,13 +187,14 @@ class MQTTClient:
             return
 
         if response.command == packets.CONNACK_BYTE:
-            self.on_connect()
+            # This should only be in the initial handshake, move from here?
+            self.call_on_connect()
         if response.command == packets.PUBLISH_BYTE:
-            self.on_message(response.data.get('topic'),
-                            response.data.get('payload'))
+            self.call_on_message(response.data.get('topic'),
+                                 response.data.get('payload'))
         if response.command == packets.DISCONNECT_BYTE:
             self.connected = False
-            self.on_disconnect()
+            self.call_on_disconnect()
 
 
 if __name__ == '__main__':
@@ -178,6 +202,7 @@ if __name__ == '__main__':
 
     def message_handler(topic, payload):
         print(f'Message recieved {topic}: {payload}')
+        peepoo
 
     def connect_handler():
         client.subscribe('test/')
