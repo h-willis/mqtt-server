@@ -29,7 +29,7 @@ class MQTTClient:
 
     def connect(self, timeout=1):
         """ Blocking method that attempts to connect to the server.
-        Optional timeout 
+        Optional timeout
         """
         self.connection.connect(timeout)
 
@@ -65,20 +65,24 @@ if __name__ == '__main__':
     client.set_on_connect_callback(connect_handler)
     client.set_on_disconnect_callback(disconnect_handler)
 
-    while not client.connected:
-        client.connect(timeout=3)
+    def connection_loop():
+        while not client.connected:
+            client.connect(timeout=3)
+    connection_loop()
 
     publish_idx = 0
 
     while True:
         print('we still here...')
         sleep(1)
+        if not client.connected:
+            connection_loop()
 
         publish_idx += 1
         if publish_idx == 3:
             client.publish('test/', 'test payload')
         if publish_idx == 6:
-            client.publish('test/', 1)
+            client.publish('test/', 1, 1)
         if publish_idx == 9:
             client.publish(1, 1)
             publish_idx = 0
