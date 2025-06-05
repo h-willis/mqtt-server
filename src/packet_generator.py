@@ -63,21 +63,35 @@ class PacketGenerator:
 
         return packet_type_flag + remaining_length + variable_header + payload
 
-    def create_publish_packet(self, topic, payload):
+    def create_publish_packet(self, topic, payload, qos, retain):
+        # we dont care about duplicate messages here
         print(f'Publishing {payload} to {topic}')
-        # TODO flags (DUP, QoS, RET)
-        encoded_topic = self._encode_string_with_length(topic)
+        # TODO flags (DUP)
+        # TODO improve this
+        command_byte = packets.PUBLISH_BYTE
+        if qos == 1:
+            command_byte &= packets.QOS_1_BITS
+        if qos == 2:
+            command_byte &= packets.QOS_2_BITS
+        if retain:
+            command_byte &= packets.RETAIN_BIT
 
-        # NOTE could add config here to allow for numbers encoded as bytes
+        # TODO is this the best way to do this?
+        packet_type_flag = bytes([command_byte])
+
+        variable_header = self._encode_string_with_length(topic)
+
+        if qos > 0:
+            variable_header += next(self.get_packet_id_bytes)
+
+        # NOTE could add config here to allow for numbers encoded as bytes?
         encoded_payload = str(payload).encode('utf-8')
         payload_length = len(encoded_payload)
 
         remaining_length = self._encode_remaining_length(
-            len(encoded_topic) + payload_length)
+            len(variable_header) + payload_length)
 
-        packet_type_flag = bytes([packets.PUBLISH_BYTE])
-
-        return packet_type_flag + remaining_length + encoded_topic + encoded_payload
+        return packet_type_flag + remaining_length + variable_header + encoded_payload
 
     def create_subscribe_packet(self, topic, qos=0):
         print(f'Subscribing to {topic} at QoS:{qos}')
@@ -87,7 +101,7 @@ class PacketGenerator:
         encoded_topic += bytes([0x00])
 
         # TODO generate packet_id
-        packet_id = bytes([0x00, 0x01])
+        packet_id = next(self.get_packet_id_bytes)
 
         remaining_length = self._encode_remaining_length(
             len(packet_id) + len(encoded_topic))
@@ -96,3 +110,9 @@ class PacketGenerator:
         packet_type_flag = bytes([packets.SUBSCRIBE_BYTE & 0xf2])
 
         return packet_type_flag + remaining_length + packet_id + encoded_topic
+
+    def get_packet_id_bytes(self, start=0):
+        # TODO loop round at highest pid value - 16 bits?
+        while True:
+            yield start.to_bytes(2, 'big')
+            start += 1

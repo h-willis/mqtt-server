@@ -22,6 +22,9 @@ class MQTTClientConnection:
         self.on_disconnect = lambda: None
         self.on_message = lambda topic, payload: None
 
+        # needs to be instance to handle increasing packet ids
+        self.pg = PacketGenerator()
+
     def generate_random_client_id(self):
         return 'PYMQTTClient-'.join(random.choices(string.ascii_letters + string.digits, k=8))
 
@@ -56,7 +59,7 @@ class MQTTClientConnection:
         try:
             self.on_connect()
         except Exception as e:
-            print(f'Error while calling on_connect callback:')
+            print('Error while calling on_connect callback:')
             print(e)
 
     def call_on_disconnect(self):
@@ -99,7 +102,8 @@ class MQTTClientConnection:
                 self.conn.settimeout(None)
 
     def negotiate_connection_to_server(self, timeout):
-        connect_packet = PacketGenerator().create_connect_packet(client_id=self.client_id)
+        connect_packet = self.pg.create_connect_packet(
+            client_id=self.client_id)
         data = None
 
         try:
@@ -116,13 +120,13 @@ class MQTTClientConnection:
 
         return data
 
-    def publish(self, topic, payload):
+    def publish(self, topic, payload, qos, retain):
         # TODO qos
         if not self.connected:
             print(f'Cant publish to {topic}, not connected to server')
             return
 
-        pub_packet = PacketGenerator().create_publish_packet(topic, payload)
+        pub_packet = self.pg.create_publish_packet(topic, payload, qos, retain)
         self.conn.sendall(pub_packet)
 
     def subscribe(self, topic):
@@ -131,7 +135,7 @@ class MQTTClientConnection:
             print(f'Cant subscribe to {topic}, not connected to server')
             return
 
-        sub_packet = PacketGenerator().create_subscribe_packet(topic)
+        sub_packet = self.pg.create_subscribe_packet(topic)
         self.conn.sendall(sub_packet)
 
     def loop(self):
@@ -168,3 +172,17 @@ class MQTTClientConnection:
         if response.command == packets.DISCONNECT_BYTE:
             self.connected = False
             self.call_on_disconnect()
+
+        # def ping_manager(self):
+    #     if not self.connected:
+    #         return
+    #     # TODO make this timer based which resets on every comms with server
+    #     # (publishing or acknowloging)
+    #     # TODO make this config option
+    #     while True:
+    #         self.ping_server()
+    #         sleep(self.keep_alive - 1)
+
+    # def ping_server(self):
+    #     ping_packet = b'\xc0\x00'  # MQTT PINGREQ
+    #     self.conn.sendall(ping_packet)

@@ -1,9 +1,6 @@
 from time import sleep
 import threading
 
-import packets
-from packet_handler import PacketHandler
-from packet_generator import PacketGenerator
 from mqtt_client_connection import MQTTClientConnection
 
 # TODO handle shutdown gracefully and kill threads
@@ -36,8 +33,8 @@ class MQTTClient:
         """
         self.connection.connect(timeout)
 
-    def publish(self, topic=None, payload=None):
-        self.connection.publish(topic, payload)
+    def publish(self, topic=None, payload=None, qos=0, retain=False):
+        self.connection.publish(topic, payload, qos, retain)
 
     def subscribe(self, topic):
         self.connection.subscribe(topic)
@@ -45,20 +42,6 @@ class MQTTClient:
     @property
     def connected(self):
         return self.connection.connected
-
-    # def ping_manager(self):
-    #     if not self.connected:
-    #         return
-    #     # TODO make this timer based which resets on every comms with server
-    #     # (publishing or acknowloging)
-    #     # TODO make this config option
-    #     while True:
-    #         self.ping_server()
-    #         sleep(self.keep_alive - 1)
-
-    # def ping_server(self):
-    #     ping_packet = b'\xc0\x00'  # MQTT PINGREQ
-    #     self.conn.sendall(ping_packet)
 
     def start_loop(self):
         self._loop_thread = threading.Thread(target=self.connection.loop)
