@@ -80,7 +80,7 @@ if __name__ == '__main__':
 
         publish_idx += 1
         if publish_idx == 3:
-            client.publish('test/', 'test payload')
+            client.publish('test/', 'test payload', 1)
         if publish_idx == 6:
             client.publish('test/', 1, 1)
         if publish_idx == 9:

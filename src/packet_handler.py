@@ -31,6 +31,7 @@ class MQTTMessage:
 
 
 COMMAND_BYTES = {
+    0x00: "UNKNOWN",
     0x10: "CONNECT",
     0x20: "CONNACK",
     0x30: "PUBLISH",

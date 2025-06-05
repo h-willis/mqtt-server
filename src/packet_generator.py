@@ -69,6 +69,7 @@ class PacketGenerator:
         # TODO flags (DUP)
         # TODO improve this
         command_byte = packets.PUBLISH_BYTE
+
         if qos == 1:
             command_byte |= packets.QOS_1_BITS
         if qos == 2:
@@ -76,7 +77,7 @@ class PacketGenerator:
         if retain:
             command_byte |= packets.RETAIN_BIT
 
-        print(f'Command byte {command_byte}')
+        print(f'Command byte {hex(command_byte)}')
 
         # TODO is this the best way to do this?
         packet_type_flag = bytes([command_byte])
