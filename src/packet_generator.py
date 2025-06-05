@@ -82,7 +82,7 @@ class PacketGenerator:
         variable_header = self._encode_string_with_length(topic)
 
         if qos > 0:
-            variable_header += next(self.get_packet_id_bytes)
+            variable_header += next(self.get_packet_id_bytes())
 
         # NOTE could add config here to allow for numbers encoded as bytes?
         encoded_payload = str(payload).encode('utf-8')
@@ -101,7 +101,7 @@ class PacketGenerator:
         encoded_topic += bytes([0x00])
 
         # TODO generate packet_id
-        packet_id = next(self.get_packet_id_bytes)
+        packet_id = next(self.get_packet_id_bytes())
 
         remaining_length = self._encode_remaining_length(
             len(packet_id) + len(encoded_topic))
@@ -111,7 +111,7 @@ class PacketGenerator:
 
         return packet_type_flag + remaining_length + packet_id + encoded_topic
 
-    def get_packet_id_bytes(self, start=0):
+    def get_packet_id_bytes(self, start=1):
         # TODO loop round at highest pid value - 16 bits?
         while True:
             yield start.to_bytes(2, 'big')
