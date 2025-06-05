@@ -7,7 +7,7 @@ Handles creation of mqtt packets to be sent including encoding length
 
 class PacketGenerator:
     def __init__(self):
-        pass
+        self.pid_generator = self.get_packet_id_bytes()
 
     def _encode_string_with_length(self, s):
         """ Encodes a string with a 2 byte length prefix
@@ -65,16 +65,18 @@ class PacketGenerator:
 
     def create_publish_packet(self, topic, payload, qos, retain):
         # we dont care about duplicate messages here
-        print(f'Publishing {payload} to {topic}')
+        print(f'Publishing {payload} to {topic} | {qos} | {retain}')
         # TODO flags (DUP)
         # TODO improve this
         command_byte = packets.PUBLISH_BYTE
         if qos == 1:
-            command_byte &= packets.QOS_1_BITS
+            command_byte |= packets.QOS_1_BITS
         if qos == 2:
-            command_byte &= packets.QOS_2_BITS
+            command_byte |= packets.QOS_2_BITS
         if retain:
-            command_byte &= packets.RETAIN_BIT
+            command_byte |= packets.RETAIN_BIT
+
+        print(f'Command byte {command_byte}')
 
         # TODO is this the best way to do this?
         packet_type_flag = bytes([command_byte])
@@ -82,7 +84,9 @@ class PacketGenerator:
         variable_header = self._encode_string_with_length(topic)
 
         if qos > 0:
-            variable_header += next(self.get_packet_id_bytes())
+            variable_header += next(self.pid_generator)
+
+        print(variable_header)
 
         # NOTE could add config here to allow for numbers encoded as bytes?
         encoded_payload = str(payload).encode('utf-8')
@@ -101,7 +105,7 @@ class PacketGenerator:
         encoded_topic += bytes([0x00])
 
         # TODO generate packet_id
-        packet_id = next(self.get_packet_id_bytes())
+        packet_id = next(self.pid_generator)
 
         remaining_length = self._encode_remaining_length(
             len(packet_id) + len(encoded_topic))
