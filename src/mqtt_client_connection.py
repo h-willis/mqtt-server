@@ -78,7 +78,7 @@ class MQTTClientConnection:
 
     def socket_connected(self):
         try:
-            self.conn.sendall(b'')
+            self.send(b'')
             return True
         except (OSError, BrokenPipeError):
             return False
@@ -87,7 +87,7 @@ class MQTTClientConnection:
         attempts = 0
         while True:
             if self.socket_connected():
-                break
+                return True
             try:
                 self.conn.settimeout(1)
                 self.conn.connect((self.address, self.port))
@@ -107,7 +107,7 @@ class MQTTClientConnection:
         data = None
 
         try:
-            self.conn.sendall(connect_packet)
+            self.send(connect_packet)
             print('Connection packet sent, waiting for response...', end='')
 
             self.conn.settimeout(timeout)
@@ -127,7 +127,7 @@ class MQTTClientConnection:
             return
 
         pub_packet = self.pg.create_publish_packet(topic, payload, qos, retain)
-        self.conn.sendall(pub_packet)
+        self.send(pub_packet)
 
     def subscribe(self, topic):
         # TODO qos
@@ -136,7 +136,7 @@ class MQTTClientConnection:
             return
 
         sub_packet = self.pg.create_subscribe_packet(topic)
-        self.conn.sendall(sub_packet)
+        self.send(sub_packet)
 
     def loop(self):
         print('Entering loop')
@@ -172,6 +172,10 @@ class MQTTClientConnection:
         if response.command == packets.DISCONNECT_BYTE:
             self.connected = False
             self.call_on_disconnect()
+
+    def send(self, data):
+        print(f'Sending {data}')
+        self.conn.sendall(data)
 
         # def ping_manager(self):
     #     if not self.connected:
