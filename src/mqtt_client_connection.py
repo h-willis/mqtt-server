@@ -174,7 +174,9 @@ class MQTTClientConnection:
             self.call_on_disconnect()
 
     def send(self, data):
-        print(f'Sending {data}')
+        # print(f'Sending {data.hex()}')
+        print('Sending', end=' ')
+        print('\\x'.join(f"{byte:02x}" for byte in data))
         self.conn.sendall(data)
 
         # def ping_manager(self):
