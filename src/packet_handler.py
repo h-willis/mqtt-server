@@ -51,7 +51,8 @@ COMMAND_BYTES = {
 
 
 class HandlerResponse:
-    def __init__(self, command, success=True, reason=None, response=None, data={}):
+    # TODO this is too multi purpose
+    def __init__(self, command, success=True, reason=None, response=None, data={}, pid=None):
         self.command = command
         self.success = success
         # reason for failures for logging
@@ -61,9 +62,12 @@ class HandlerResponse:
         # topics and payloads?
         # TODO see if there's a better way of returning this
         self.data = data
+        self.pid = pid
 
     def __str__(self):
         return f'{COMMAND_BYTES[self.command]} | {self.success} | {self.reason} | {self.response}'
+
+# TODO check through all this as GPT generated
 
 
 class PacketHandler:
@@ -73,7 +77,7 @@ class PacketHandler:
             packets.CONNECT_BYTE: self.handler_not_implemented,     # "CONNECT"
             packets.CONNACK_BYTE: self.handle_connack,              # "CONNACK"
             packets.PUBLISH_BYTE: self.handle_publish,              # "PUBLISH"
-            packets.PUBACK_BYTE: self.handler_not_implemented,      # "PUBACK"
+            packets.PUBACK_BYTE: self.handle_puback,      # "PUBACK"
             packets.PUBREC_BYTE: self.handler_not_implemented,      # "PUBREC"
             packets.PUBREL_BYTE: self.handler_not_implemented,      # "PUBREL"
             packets.PUBCOMP_BYTE: self.handler_not_implemented,     # "PUBCOMP"
@@ -183,6 +187,45 @@ class PacketHandler:
         # Optionally store or forward this message, depending on your broker logic
 
         return HandlerResponse(packets.PUBLISH_BYTE, data={'topic': topic, 'payload': payload})
+
+    def handle_puback(self):
+        print(f'Handling PUBACK for: {self.packet}')
+
+        if len(self.packet) < 4:
+            return HandlerResponse(
+                command=packets.PUBACK_BYTE,
+                success=False,
+                reason="PUBACK packet too short",
+            )
+
+        fixed_header = self.packet[0]
+        remaining_length = self.packet[1]
+
+        if fixed_header != packets.PUBACK_BYTE:
+            return HandlerResponse(
+                command=packets.PUBACK_BYTE,
+                success=False,
+                reason=f"Unexpected control byte: {hex(fixed_header)}",
+            )
+
+        if remaining_length != 2:
+            return HandlerResponse(
+                command=packets.PUBACK_BYTE,
+                success=False,
+                reason=f"Invalid remaining length: {remaining_length}, expected 2",
+            )
+
+        packet_id = int.from_bytes(self.packet[2:4], byteorder='big')
+
+        print(f'Received PUBACK for Packet ID: {packet_id}')
+
+        # Here you might mark the original publish as complete, remove from inflight, etc.
+
+        return HandlerResponse(
+            command=packets.PUBACK_BYTE,
+            data={'packet_id': packet_id},
+            pid=packet_id
+        )
 
     def handle_suback(self):
         # Receive the data (this could be more dynamic based on the packet size)

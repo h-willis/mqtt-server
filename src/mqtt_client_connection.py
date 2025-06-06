@@ -3,9 +3,12 @@ import random
 import string
 from time import sleep
 
+# packet stuff
 from packet_handler import PacketHandler
 from packet_generator import PacketGenerator
 import packets
+
+from mqtt_client_messages import MQTTClientMessages
 
 
 class MQTTClientConnection:
@@ -24,6 +27,8 @@ class MQTTClientConnection:
 
         # needs to be instance to handle increasing packet ids
         self.pg = PacketGenerator()
+
+        self.messages = MQTTClientMessages()
 
     def generate_random_client_id(self):
         return 'PYMQTTClient-'.join(random.choices(string.ascii_letters + string.digits, k=8))
@@ -127,7 +132,8 @@ class MQTTClientConnection:
             return
 
         pub_packet = self.pg.create_publish_packet(topic, payload, qos, retain)
-        self.send(pub_packet)
+        self.messages.add(pub_packet)
+        self.send(pub_packet.raw_bytes)
 
     def subscribe(self, topic):
         # TODO qos
@@ -169,6 +175,8 @@ class MQTTClientConnection:
         if response.command == packets.PUBLISH_BYTE:
             self.call_on_message(response.data.get('topic'),
                                  response.data.get('payload'))
+        if response.command == packets.PUBACK_BYTE:
+            self.messages.acknowledge(response.command, response.pid)
         if response.command == packets.DISCONNECT_BYTE:
             self.connected = False
             self.call_on_disconnect()

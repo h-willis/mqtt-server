@@ -5,6 +5,16 @@ Handles creation of mqtt packets to be sent including encoding length
 """
 
 
+class Packet:
+    def __init__(self, command, raw_bytes, pid=None):
+        self.command = command
+        self.raw_bytes = raw_bytes
+        self.pid = pid
+
+    def __str__(self):
+        return f'{self.command} | {self.pid}'
+
+
 class PacketGenerator:
     def __init__(self):
         self.pid_generator = self.get_packet_id_bytes()
@@ -64,7 +74,6 @@ class PacketGenerator:
         return packet_type_flag + remaining_length + variable_header + payload
 
     def create_publish_packet(self, topic, payload, qos, retain):
-        # we dont care about duplicate messages here
         print(f'Publishing {payload} to {topic} | {qos} | {retain}')
         # TODO flags (DUP)
         # TODO improve this
@@ -84,8 +93,11 @@ class PacketGenerator:
 
         variable_header = self._encode_string_with_length(topic)
 
+        pid = None
         if qos > 0:
-            variable_header += next(self.pid_generator)
+            # add packet id in correct places
+            pid = next(self.pid_generator)
+            variable_header += pid
 
         print(variable_header)
 
@@ -96,7 +108,9 @@ class PacketGenerator:
         remaining_length = self._encode_remaining_length(
             len(variable_header) + payload_length)
 
-        return packet_type_flag + remaining_length + variable_header + encoded_payload
+        raw_bytes = packet_type_flag + remaining_length + \
+            variable_header + encoded_payload
+        return Packet(command_byte, raw_bytes, int.from_bytes(pid, 'big'))
 
     def create_subscribe_packet(self, topic, qos=0):
         print(f'Subscribing to {topic} at QoS:{qos}')
