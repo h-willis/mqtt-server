@@ -84,6 +84,6 @@ if __name__ == '__main__':
             pass
         if publish_idx == 6:
             client.publish('test/', 1, 1)
-        if publish_idx == 9:
-            # client.publish(1, 1)
-            publish_idx = 0
+        # if publish_idx == 9:
+        #     # client.publish(1, 1)
+        #     publish_idx = 0

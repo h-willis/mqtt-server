@@ -170,6 +170,7 @@ class PacketHandler:
 
         # MQTT Fixed header: byte 1 = control byte, byte 2+ = remaining length
         fixed_header = self.packet[0]
+        qos = (fixed_header & 0b00000110) >> 1
         remaining_length = self.packet[1]
 
         # Start of variable header: Topic name (2-byte length + UTF-8 string)
@@ -183,8 +184,9 @@ class PacketHandler:
         payload = self.packet[payload_start:].decode('utf-8')
 
         print(f'Topic: {topic}, Payload: {payload}')
+        if qos == 1:
 
-        # Optionally store or forward this message, depending on your broker logic
+            # Optionally store or forward this message, depending on your broker logic
 
         return HandlerResponse(packets.PUBLISH_BYTE, data={'topic': topic, 'payload': payload})
 

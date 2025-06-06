@@ -132,7 +132,7 @@ class MQTTClientConnection:
             return
 
         pub_packet = self.pg.create_publish_packet(topic, payload, qos, retain)
-        self.messages.add(pub_packet)
+        self.messages.add(pub_packet, qos)
         self.send(pub_packet.raw_bytes)
 
     def subscribe(self, topic):
@@ -175,6 +175,10 @@ class MQTTClientConnection:
         if response.command == packets.PUBLISH_BYTE:
             self.call_on_message(response.data.get('topic'),
                                  response.data.get('payload'))
+            # if qos 1 send puback
+            if response.command & 0b00000110 == 0b00000010:
+                self.conn.send(response.response)
+
         if response.command == packets.PUBACK_BYTE:
             self.messages.acknowledge(response.command, response.pid)
         if response.command == packets.DISCONNECT_BYTE:
@@ -182,7 +186,6 @@ class MQTTClientConnection:
             self.call_on_disconnect()
 
     def send(self, data):
-        # print(f'Sending {data.hex()}')
         print('Sending', end=' ')
         print('\\x'.join(f"{byte:02x}" for byte in data))
         self.conn.sendall(data)
