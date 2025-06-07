@@ -184,11 +184,13 @@ class PacketHandler:
         payload = self.packet[payload_start:].decode('utf-8')
 
         print(f'Topic: {topic}, Payload: {payload}')
-        if qos == 1:
+        pid = None
+        if qos > 0:
+            pid = self.packet[topic_end:topic_end + 2]
 
             # Optionally store or forward this message, depending on your broker logic
 
-        return HandlerResponse(packets.PUBLISH_BYTE, data={'topic': topic, 'payload': payload})
+        return HandlerResponse(fixed_header, data={'topic': topic, 'payload': payload, 'pid': pid})
 
     def handle_puback(self):
         print(f'Handling PUBACK for: {self.packet}')

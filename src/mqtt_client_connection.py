@@ -175,9 +175,15 @@ class MQTTClientConnection:
         if response.command == packets.PUBLISH_BYTE:
             self.call_on_message(response.data.get('topic'),
                                  response.data.get('payload'))
+
             # if qos 1 send puback
+            # TODO make this test more readable
+            print(f'TESTING FOR QOS 1 MESSAGE {hex(response.command)}')
             if response.command & 0b00000110 == 0b00000010:
-                self.conn.send(response.response)
+                print(f'SENDING PUBACK FOR QOS 1 MESSAGE')
+                puback_packet = self.pg.create_puback_packet(
+                    response.data.get('pid'))
+                self.conn.send(puback_packet)
 
         if response.command == packets.PUBACK_BYTE:
             self.messages.acknowledge(response.command, response.pid)
