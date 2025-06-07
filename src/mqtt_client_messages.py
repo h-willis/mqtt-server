@@ -27,6 +27,26 @@ class MQTTClientQoS1Messages:
             print("Couldn't find pid")
 
 
+class QoS2Message:
+    def __init__(self, packet, pid):
+        self.packet = packet
+        self.pid = pid
+        self.state = 'PUBLISH'
+
+
+class MQTTClientQoS2Messages:
+    # Handshake looks like this
+    # PUBLISH ->
+    # PUBREC  <-
+    # PUBREL  ->
+    # PUBCOMP <-
+    def __init__(self):
+        self.messages = {}
+
+    def add(self, packet, pid):
+        self.messages[pid] = QoS2Message(packet, pid)
+
+
 class MQTTClientMessages:
     """ When a message that requires acknowledgement is sent it's added to the
     list and a timer started for a reattempt at sending 
