@@ -4,7 +4,7 @@ import string
 from time import sleep
 
 # packet stuff
-from packet_handler import PacketHandler
+from packet_handler import PacketHandler, PacketHandlerError
 from packet_generator import PacketGenerator
 import packets
 
@@ -44,17 +44,19 @@ class MQTTClientConnection:
         print(
             f'Client: {self.client_id} connected to {self.address}:{self.port}')
 
+        # TODO this could be better
         server_response = self.negotiate_connection_to_server(timeout)
 
-        response = PacketHandler().handle_packet(server_response)
-
-        if response.success:
-            print('We connected!')
-            self.connected = True
-            self.call_on_connect()
-        else:
-            print(f'Connection refused {response.reason}')
+        try:
+            response = PacketHandler().handle_packet(server_response)
+        except PacketHandlerError as e:
+            print(e.message)
             self.connected = False
+            return
+
+        print('We connected!')
+        self.connected = True
+        self.call_on_connect()
 
         # TODO ping threading as optional start
         # self.ping_thread = threading.Thread(target=self.ping_manager)
@@ -119,7 +121,7 @@ class MQTTClientConnection:
             data = self.conn.recv(4)
         except TimeoutError:
             print('No response from server.')
-            return
+            return None
         finally:
             self.conn.settimeout(None)
 
@@ -159,8 +161,11 @@ class MQTTClientConnection:
                 return
 
             print(f'recv {data}')
-            response = PacketHandler().handle_packet(data)
-            self.handle_response(response)
+            try:
+                response = PacketHandler().handle_packet(data)
+                self.handle_response(response)
+            except PacketHandlerError as e:
+                print(e)
 
     def handle_response(self, response):
         print(f'Handling response: {response}')
@@ -170,23 +175,26 @@ class MQTTClientConnection:
             return
 
         if response.command == packets.CONNACK_BYTE:
-            # This should only be in the initial handshake, move from here?
+            # TODO This should only be in the initial handshake, move from here?
             self.call_on_connect()
+
         if response.command == packets.PUBLISH_BYTE:
             self.call_on_message(response.data.get('topic'),
                                  response.data.get('payload'))
 
             # if qos 1 send puback
-            # TODO make this test more readable
-            print(f'TESTING FOR QOS 1 MESSAGE {hex(response.command)}')
-            if response.command & 0b00000110 == 0b00000010:
-                print(f'SENDING PUBACK FOR QOS 1 MESSAGE')
+            if response.data.get('qos') == 1:
                 puback_packet = self.pg.create_puback_packet(
-                    response.data.get('pid'))
-                self.conn.send(puback_packet)
+                    response.data.get('packet_id'))
+                self.send(puback_packet.raw_bytes)
+
+            if response.data.get('qos') == 2:
+                # TODO add to qos message workflow
+                pass
 
         if response.command == packets.PUBACK_BYTE:
-            self.messages.acknowledge(response.command, response.pid)
+            self.messages.acknowledge(response.command, response.packet_id)
+
         if response.command == packets.DISCONNECT_BYTE:
             self.connected = False
             self.call_on_disconnect()
