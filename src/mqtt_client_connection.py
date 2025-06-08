@@ -170,10 +170,6 @@ class MQTTClientConnection:
     def handle_response(self, response):
         print(f'Handling response: {response}')
 
-        if not response.success:
-            print(f'Not successful {response.reason}')
-            return
-
         if response.command == packets.CONNACK_BYTE:
             # TODO This should only be in the initial handshake, move from here?
             self.call_on_connect()

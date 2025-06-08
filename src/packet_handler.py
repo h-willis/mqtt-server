@@ -295,7 +295,7 @@ class PacketHandler:
             raise PacketHandlerError("Invalid PUBACK remaining length")
 
         packet_id = (self.packet[2] << 8) | self.packet[3]
-        packet_id = int.from_bytes(self.packet[2:], 'bytes')
+        packet_id = int.from_bytes(self.packet[2:], 'big')
 
         print(f"Received PUBACK for Packet ID: {packet_id}")
 
