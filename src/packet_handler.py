@@ -1,6 +1,6 @@
 # handlers for each of the expected MQTT packets:
 import packets
-from pprint import pprint
+from pprint import pformat
 
 """
 1	    CONNECT	        Client request to connect to a broker.
@@ -59,7 +59,7 @@ class HandlerResponse:
         self.data = data if data is not None else {}
 
     def __str__(self):
-        return f'{COMMAND_BYTES[self.command]} | Data:\r{pprint(self.data)}'
+        return f'{COMMAND_BYTES[self.command]} | Data:\r\n{pformat(self.data)}'
 
 # TODO check through all this as GPT generated
 
@@ -86,9 +86,13 @@ class PacketHandler:
         }
 
     def handle_packet(self, packet):
+        datapr = ', '.join(f"{byte:02x}" for byte in packet)
+        print(f'recv {datapr}', end='')
+
         # just look at top 4 bytes
         self.packet = packet
         if not self.packet:
+            print('\r')
             raise PacketHandlerError("No packet to handle")
 
         # masks out flags
@@ -96,16 +100,14 @@ class PacketHandler:
 
         if command not in COMMAND_BYTES:
             # basically if it's 0
+            print('\r')
             raise PacketHandlerError("Invalid command byte")
 
-        print(f'{COMMAND_BYTES[command]} packet recieved')
+        print(f' | {COMMAND_BYTES[command]}')
 
         return self.handlers[command]()
 
     def handle_connack(self):
-        # Receive the data (this could be more dynamic based on the packet size)
-        print(f'Handling connack for: {self.packet}')
-
         # Check if the packet length is valid and it's a CONNACK packet
         if len(self.packet) < 4:
             raise PacketHandlerError("Invalid packet length")
@@ -173,8 +175,6 @@ class PacketHandler:
     #     return HandlerResponse(fixed_header, data={'topic': topic, 'payload': payload, 'pid': pid})
 
     def handle_publish(self):
-        print(f'Handling publish for: {self.packet}')
-
         if len(self.packet) < 4:
             raise PacketHandlerError("Invalid PUBLISH packet length")
 
@@ -200,7 +200,7 @@ class PacketHandler:
             raise PacketHandlerError("Incomplete PUBLISH packet")
 
         # Parse Topic Name
-        topic_length = int.from_bytes(self.packet[index:index + 1], 'big')
+        topic_length = int.from_bytes(self.packet[index:index + 2], 'big')
         # topic_length = (self.packet[index] << 8) | self.packet[index + 1]
         index += 2
         if index + topic_length > len(self.packet):
@@ -216,7 +216,7 @@ class PacketHandler:
                 raise PacketHandlerError(
                     "Expected Packet Identifier missing for QoS > 0")
             # packet_id = (self.packet[index] << 8) | self.packet[index + 1]
-            packet_id = int.from_bytes(self.packet[index:index + 1], 'big')
+            packet_id = int.from_bytes(self.packet[index:index + 2], 'big')
             index += 2
 
         # Remaining is payload
@@ -225,9 +225,6 @@ class PacketHandler:
             payload = payload_bytes.decode('utf-8')
         except UnicodeDecodeError:
             payload = payload_bytes  # fallback to raw bytes if not UTF-8
-
-        print(
-            f"Received PUBLISH: topic='{topic}', payload='{payload}', QoS={qos_level}, DUP={dup_flag}, RETAIN={retain}, Packet ID={packet_id}")
 
         return HandlerResponse(
             command=0x30,
@@ -281,8 +278,6 @@ class PacketHandler:
     #         pid=packet_id
     #     )
     def handle_puback(self):
-        print(f'Handling PUBACK for: {self.packet}')
-
         if len(self.packet) != 4:
             raise PacketHandlerError("Invalid PUBACK packet length")
 
@@ -297,13 +292,12 @@ class PacketHandler:
         packet_id = (self.packet[2] << 8) | self.packet[3]
         packet_id = int.from_bytes(self.packet[2:], 'big')
 
-        print(f"Received PUBACK for Packet ID: {packet_id}")
+        # print(f"Received PUBACK for Packet ID: {packet_id}")
 
         return HandlerResponse(command=0x40, data={'packet_id': packet_id})
 
     # def handle_suback(self):
     #     # Receive the data (this could be more dynamic based on the packet size)
-    #     print(f'Handling suback for: {self.packet}')
     #     success = True
 
     #     # Check if the packet length is valid and it's a SUBACK packet
@@ -347,8 +341,6 @@ class PacketHandler:
     #     return HandlerResponse(command=packets.SUBACK_BYTE, success=True)
 
     def handle_suback(self):
-        print(f'Handling SUBACK for: {self.packet}')
-
         if len(self.packet) < 5:
             raise PacketHandlerError("Invalid SUBACK packet length")
 
@@ -365,16 +357,16 @@ class PacketHandler:
             raise PacketHandlerError("Incomplete SUBACK packet")
 
         # Packet Identifier (2 bytes)
-        packet_id = (self.packet[index] << 8) | self.packet[index + 1]
-        packet_id = int.from_bytes(self.packet[index:index + 1], 'big')
+        # packet_id = (self.packet[index] << 8) | self.packet[index + 1]
+        packet_id = int.from_bytes(self.packet[index:index + 2], 'big')
         index += 2
 
         # Return codes (one byte per subscription topic)
         # TODO more readable
         return_codes = list(self.packet[index:index + (remaining_length - 2)])
 
-        print(
-            f"Received SUBACK: Packet ID={packet_id}, Return Codes={return_codes}")
+        # print(
+        #     f"Received SUBACK: Packet ID={packet_id}, Return Codes={return_codes}")
 
         return HandlerResponse(
             command=0x90,
@@ -385,7 +377,6 @@ class PacketHandler:
         )
 
     def handle_pingresp(self):
-        print(f'Handling pingresp for {self.packet}')
         print("TODO somehow use this for the client to know when it's connection is dead")
         return HandlerResponse(command=packets.PINGRESP_BYTE)
 

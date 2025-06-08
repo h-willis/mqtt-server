@@ -115,7 +115,7 @@ class PacketGenerator:
     def create_puback_packet(self, pid):
         command_byte = bytes([packets.PUBACK_BYTE])
         remaining_length = bytes([2])
-        raw_bytes = command_byte + remaining_length + pid
+        raw_bytes = command_byte + remaining_length + pid.to_bytes(2, 'big')
 
         return Packet(command_byte, raw_bytes, pid)
 

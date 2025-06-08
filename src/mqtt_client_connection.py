@@ -160,15 +160,15 @@ class MQTTClientConnection:
                 print(f'{self.client_id} Disconnected')
                 return
 
-            print(f'recv {data}')
             try:
                 response = PacketHandler().handle_packet(data)
+                print(response)
                 self.handle_response(response)
             except PacketHandlerError as e:
                 print(e)
 
     def handle_response(self, response):
-        print(f'Handling response: {response}')
+        # print(f'Handling response: {response}')
 
         if response.command == packets.CONNACK_BYTE:
             # TODO This should only be in the initial handshake, move from here?
@@ -189,7 +189,8 @@ class MQTTClientConnection:
                 pass
 
         if response.command == packets.PUBACK_BYTE:
-            self.messages.acknowledge(response.command, response.packet_id)
+            self.messages.acknowledge(
+                response.command, response.data.get('packet_id'))
 
         if response.command == packets.DISCONNECT_BYTE:
             self.connected = False

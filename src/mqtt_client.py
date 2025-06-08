@@ -52,7 +52,7 @@ if __name__ == '__main__':
     client = MQTTClient('localhost', 1883, 'PYMQTTClient-00000000')
 
     def message_handler(topic, payload):
-        print(f'Message recieved {topic}: {payload}')
+        print(f'ON MESSAGE Message recieved {topic}: {payload}')
 
     def connect_handler():
         client.subscribe('test/')
@@ -68,6 +68,7 @@ if __name__ == '__main__':
     def connection_loop():
         while not client.connected:
             client.connect(timeout=3)
+
     connection_loop()
 
     publish_idx = 0
@@ -75,6 +76,7 @@ if __name__ == '__main__':
     while True:
         print('we still here...')
         sleep(1)
+
         if not client.connected:
             connection_loop()
 
@@ -83,7 +85,8 @@ if __name__ == '__main__':
             # client.publish('test/', 'test payload', 1)
             pass
         if publish_idx == 6:
-            client.publish('test/', 1, 1)
+            pass
+            # client.publish('test/', 1, 1)
         # if publish_idx == 9:
         #     # client.publish(1, 1)
         #     publish_idx = 0
