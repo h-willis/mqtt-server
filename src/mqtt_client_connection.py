@@ -46,7 +46,7 @@ class MQTTClientConnection:
 
         server_response = self.negotiate_connection_to_server(timeout)
 
-        response = PacketHandler(server_response).handle_packet()
+        response = PacketHandler().handle_packet(server_response)
 
         if response.success:
             print('We connected!')
@@ -159,7 +159,7 @@ class MQTTClientConnection:
                 return
 
             print(f'recv {data}')
-            response = PacketHandler(data).handle_packet()
+            response = PacketHandler().handle_packet(data)
             self.handle_response(response)
 
     def handle_response(self, response):
