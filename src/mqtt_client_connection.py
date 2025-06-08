@@ -137,13 +137,13 @@ class MQTTClientConnection:
         self.messages.add(pub_packet, qos)
         self.send(pub_packet.raw_bytes)
 
-    def subscribe(self, topic):
+    def subscribe(self, topic, qos):
         # TODO qos
         if not self.connected:
             print(f'Cant subscribe to {topic}, not connected to server')
             return
 
-        sub_packet = self.pg.create_subscribe_packet(topic)
+        sub_packet = self.pg.create_subscribe_packet(topic, qos)
         self.send(sub_packet)
 
     def loop(self):

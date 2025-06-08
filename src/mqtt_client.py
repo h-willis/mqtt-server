@@ -36,8 +36,8 @@ class MQTTClient:
     def publish(self, topic=None, payload=None, qos=0, retain=False):
         self.connection.publish(topic, payload, qos, retain)
 
-    def subscribe(self, topic):
-        self.connection.subscribe(topic)
+    def subscribe(self, topic, qos=0):
+        self.connection.subscribe(topic, 1)
 
     @property
     def connected(self):
