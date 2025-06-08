@@ -122,11 +122,9 @@ class PacketGenerator:
     def create_subscribe_packet(self, topic, qos=0):
         print(f'Subscribing to {topic} at QoS:{qos}')
         # TODO list of topics
-        # TODO qos selection
         encoded_topic = self._encode_string_with_length(topic)
-        encoded_topic += bytes([0x00])
+        encoded_topic += bytes([qos])
 
-        # TODO generate packet_id
         packet_id = next(self.pid_generator)
 
         remaining_length = self._encode_remaining_length(
@@ -138,6 +136,9 @@ class PacketGenerator:
         return packet_type_flag + remaining_length + packet_id + encoded_topic
 
     def get_packet_id_bytes(self, start=1):
+        # pid cant be 0 so must start at 1
+        # TODO should the client have some non vol memory to start the pid at
+        # the last used value?
         # TODO loop round at highest pid value - 16 bits?
         while True:
             yield start.to_bytes(2, 'big')
