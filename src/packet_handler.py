@@ -59,7 +59,7 @@ class HandlerResponse:
         self.data = data if data is not None else {}
 
     def __str__(self):
-        return f'{COMMAND_BYTES[self]} | Data:\r{pprint(self.data)}'
+        return f'{COMMAND_BYTES[self.command]} | Data:\r{pprint(self.data)}'
 
 # TODO check through all this as GPT generated
 
