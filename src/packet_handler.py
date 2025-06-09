@@ -149,31 +149,6 @@ class PacketHandler:
 
         return HandlerResponse(command=0x20, data={'flags': response_flags})
 
-    # def handle_publish(self):
-    #     print(f'Handling publish for: {self.packet}')
-
-    #     # MQTT Fixed header: byte 1 = control byte, byte 2+ = remaining length
-    #     fixed_header = self.packet[0]
-    #     qos = (fixed_header & 0b00000110) >> 1
-    #     remaining_length = self.packet[1]
-
-    #     # Start of variable header: Topic name (2-byte length + UTF-8 string)
-    #     topic_length = int.from_bytes(self.packet[2:4], byteorder='big')
-    #     topic_start = 4
-    #     topic_end = topic_start + topic_length
-    #     topic = self.packet[topic_start:topic_end].decode('utf-8')
-
-    #     # Payload starts immediately after topic (and maybe packet identifier if QoS > 0)
-    #     payload_start = topic_end
-    #     payload = self.packet[payload_start:].decode('utf-8')
-
-    #     print(f'Topic: {topic}, Payload: {payload}')
-    #     pid = None
-    #     if qos > 0:
-    #         pid = self.packet[topic_end:topic_end + 2]
-
-    #     return HandlerResponse(fixed_header, data={'topic': topic, 'payload': payload, 'pid': pid})
-
     def handle_publish(self):
         if len(self.packet) < 4:
             raise PacketHandlerError("Invalid PUBLISH packet length")
@@ -238,45 +213,6 @@ class PacketHandler:
             }
         )
 
-    # def handle_puback(self):
-    #     print(f'Handling PUBACK for: {self.packet}')
-    #     return
-
-    #     if len(self.packet) < 4:
-    #         return HandlerResponse(
-    #             command=packets.PUBACK_BYTE,
-    #             success=False,
-    #             reason="PUBACK packet too short",
-    #         )
-
-    #     fixed_header = self.packet[0]
-    #     remaining_length = self.packet[1]
-
-    #     if fixed_header != packets.PUBACK_BYTE:
-    #         return HandlerResponse(
-    #             command=packets.PUBACK_BYTE,
-    #             success=False,
-    #             reason=f"Unexpected control byte: {hex(fixed_header)}",
-    #         )
-
-    #     if remaining_length != 2:
-    #         return HandlerResponse(
-    #             command=packets.PUBACK_BYTE,
-    #             success=False,
-    #             reason=f"Invalid remaining length: {remaining_length}, expected 2",
-    #         )
-
-    #     packet_id = int.from_bytes(self.packet[2:4], byteorder='big')
-
-    #     print(f'Received PUBACK for Packet ID: {packet_id}')
-
-    #     # Here you might mark the original publish as complete, remove from inflight, etc.
-
-    #     return HandlerResponse(
-    #         command=packets.PUBACK_BYTE,
-    #         data={'packet_id': packet_id},
-    #         pid=packet_id
-    #     )
     def handle_puback(self):
         if len(self.packet) != 4:
             raise PacketHandlerError("Invalid PUBACK packet length")
@@ -295,50 +231,6 @@ class PacketHandler:
         # print(f"Received PUBACK for Packet ID: {packet_id}")
 
         return HandlerResponse(command=0x40, data={'packet_id': packet_id})
-
-    # def handle_suback(self):
-    #     # Receive the data (this could be more dynamic based on the packet size)
-    #     success = True
-
-    #     # Check if the packet length is valid and it's a SUBACK packet
-    #     if len(self.packet) < 4:
-    #         print("Invalid packet length")
-    #         success = False
-    #         return success
-
-    #     # SUBACK format:
-    #     # Byte 1: Fixed header (always 0x90 for SUBACK)
-    #     # Byte 2: Remaining length (typically the number of QoS values)
-    #     # Byte 3: Packet ID (2 bytes)
-    #     # Byte 4+ : Return codes (1 byte for each subscription)
-
-    #     fixed_header = self.packet[0]
-    #     remaining_length = self.packet[1]
-
-    #     # Ensure the packet starts with the correct SUBACK header (0x90)
-    #     if fixed_header != 0x90:
-    #         print("Invalid SUBACK packet")
-    #         success = False
-    #         return success
-
-    #     # Packet ID is 2 bytes
-    #     packet_id = int.from_bytes(self.packet[2:4], byteorder='big')
-
-    #     # Get the QoS levels (starting from byte 4)
-    #     qos_levels = self.packet[4:]
-
-    #     print(f"Packet ID: {packet_id}")
-    #     print(f"QoS levels: {qos_levels}")
-
-    #     # Validate the QoS return codes (valid values are 0x00, 0x01, and 0x02)
-    #     for i, qos in enumerate(qos_levels):
-    #         if qos not in [0x00, 0x01, 0x02]:
-    #             print(f"Invalid QoS level at index {i}: {qos}")
-    #             success = False
-    #             break
-
-    #     # Optionally handle additional scenarios if needed
-    #     return HandlerResponse(command=packets.SUBACK_BYTE, success=True)
 
     def handle_suback(self):
         if len(self.packet) < 5:

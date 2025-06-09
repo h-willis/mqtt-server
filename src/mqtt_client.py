@@ -55,10 +55,12 @@ if __name__ == '__main__':
         print(f'ON MESSAGE Message recieved {topic}: {payload}')
 
     def connect_handler():
+        print('On connect called')
         client.subscribe('test/')
         client.start_loop()
 
     def disconnect_handler():
+        print('On disconnect called')
         client.connect()
 
     client.set_on_message_callback(message_handler)
