@@ -34,10 +34,18 @@ class MQTTClient:
         self.connection.connect(timeout)
 
     def publish(self, topic=None, payload=None, qos=0, retain=False):
+        if qos > 2 or qos < 0:
+            print(f'Invalid qos value {qos}')
+            return
+
         self.connection.publish(topic, payload, qos, retain)
 
     def subscribe(self, topic, qos=0):
-        self.connection.subscribe(topic, 1)
+        if qos > 2 or qos < 0:
+            print(f'Invalid qos value {qos}')
+            return
+
+        self.connection.subscribe(topic, qos)
 
     @property
     def connected(self):
@@ -56,7 +64,7 @@ if __name__ == '__main__':
 
     def connect_handler():
         print('On connect called')
-        client.subscribe('test/')
+        client.subscribe('testsubqos2/', 2)
         client.start_loop()
 
     def disconnect_handler():
@@ -87,8 +95,7 @@ if __name__ == '__main__':
             # client.publish('test/', 'test payload', 1)
             pass
         if publish_idx == 6:
-            pass
-            # client.publish('test/', 1, 1)
+            client.publish('testpubqos2/', 1, 2)
         # if publish_idx == 9:
         #     # client.publish(1, 1)
         #     publish_idx = 0

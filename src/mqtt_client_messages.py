@@ -17,8 +17,8 @@ class MQTTClientQoS1Messages:
         print(f'adding {packet}')
         self.packets[packet.pid] = packet
 
-    def acknowledge(self, command, pid):
-        print(f'acknowledging {command} | {pid}: ', end='')
+    def acknowledge(self, pid):
+        print(f'acknowledging qos 1 {pid}: ', end='')
 
         try:
             del self.packets[pid]
@@ -28,10 +28,24 @@ class MQTTClientQoS1Messages:
 
 
 class QoS2Message:
-    def __init__(self, packet, pid):
+    def __init__(self, packet, state):
         self.packet = packet
-        self.pid = pid
-        self.state = 'PUBLISH'
+        self.state = state
+
+    def advance_state(self):
+        # this is tracking the last message sent rather than what is expected
+        # TODO define these strings
+        if self.state == 'PUBLISH':
+            self.state = 'PUBREL'
+            return
+
+        if self.state == 'PUBREC':
+            self.state = 'DONE'
+            return
+
+        if self.state == 'PUBREL':
+            self.state = 'DONE'
+            return
 
 
 class MQTTClientQoS2Messages:
@@ -43,31 +57,41 @@ class MQTTClientQoS2Messages:
     def __init__(self):
         self.messages = {}
 
-    def add(self, packet, pid):
-        self.messages[pid] = QoS2Message(packet, pid)
+    def add(self, packet, pid, state):
+        self.messages[pid] = QoS2Message(packet, state)
+
+    def acknowledge(self, pid):
+        print(f'acknowledging qos 2 {pid}: ', end='')
+
+        try:
+            self.messages[pid].advance_state()
+            print(self.messages[pid].state)
+
+            if self.messages[pid].state == 'DONE':
+                print(f'Handshake complete for {pid}')
+                del self.messages[pid]
+
+        except KeyError:
+            print("Couldn't find pid")
 
 
 class MQTTClientMessages:
     """ When a message that requires acknowledgement is sent it's added to the
     list and a timer started for a reattempt at sending 
-    TODO this needs two separate lists for qos 1 and qos 2 messages
     """
 
     def __init__(self):
         self.qos_1_messages = MQTTClientQoS1Messages()
+        self.qos_2_messages = MQTTClientQoS2Messages()
 
-    def add(self, packet, qos):
-        """ Takes packet info from 
+    def add_qos_1(self, packet):
+        self.qos_1_messages.add(packet)
 
-        Args:
-            message (_type_): _description_
-        """
-        print(f'adding {packet}, {qos}')
+    def add_qos_2(self, packet, pid, state='PUBLISH'):
+        self.qos_2_messages.add(packet, pid, state)
+
+    def acknowledge(self, qos, pid):
         if qos == 1:
-            self.qos_1_messages.add(packet)
-
-    def acknowledge(self, command, pid):
-        print(f'acknowledging {command} | {pid}: ', end='')
-
-        if command == packets.PUBACK_BYTE:
-            self.qos_1_messages.acknowledge(command, pid)
+            self.qos_1_messages.acknowledge(pid)
+            return
+        self.qos_2_messages.acknowledge(pid)

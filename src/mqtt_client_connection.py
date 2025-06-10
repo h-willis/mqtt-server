@@ -134,11 +134,13 @@ class MQTTClientConnection:
             return
 
         pub_packet = self.pg.create_publish_packet(topic, payload, qos, retain)
-        self.messages.add(pub_packet, qos)
+        if qos == 1:
+            self.messages.add_qos_1(pub_packet)
+        if qos == 2:
+            self.messages.add_qos_2(pub_packet, pub_packet.pid)
         self.send(pub_packet.raw_bytes)
 
     def subscribe(self, topic, qos):
-        # TODO qos
         if not self.connected:
             print(f'Cant subscribe to {topic}, not connected to server')
             return
@@ -152,6 +154,8 @@ class MQTTClientConnection:
             # TODO read more data if this isnt long enough
             # read a bunch more until no more data, or construct the bytes-left
             # of the packet and read that much more?
+            # TODO read only one byte, then construct length from next bytes as
+            # server batch sends data
             data = self.conn.recv(1024)
             if not data:
                 self.connected = False
@@ -161,6 +165,7 @@ class MQTTClientConnection:
                 return
 
             try:
+                # TODO come up with a better name for this
                 response = PacketHandler().handle_packet(data)
                 print(response)
                 self.handle_response(response)
@@ -168,6 +173,7 @@ class MQTTClientConnection:
                 print(e)
 
     def handle_response(self, response):
+        # TODO break this up
         # print(f'Handling response: {response}')
 
         if response.command == packets.CONNACK_BYTE:
@@ -175,6 +181,18 @@ class MQTTClientConnection:
             self.call_on_connect()
 
         if response.command == packets.PUBLISH_BYTE:
+            # qos 2 first because we dont on on message until the handshake is complete
+            if response.data.get('qos') == 2:
+                self.messages.add_qos_2(
+                    response, response.data.get('packet_id'), 'PUBREC')
+
+                # we send PUBREC here and store message for handshake
+                pubrec_packet = self.pg.create_pubrec_packet(
+                    response.data.get('packet_id'))
+                self.send(pubrec_packet.raw_bytes)
+                return
+
+            # messages received
             self.call_on_message(response.data.get('topic'),
                                  response.data.get('payload'))
 
@@ -184,13 +202,33 @@ class MQTTClientConnection:
                     response.data.get('packet_id'))
                 self.send(puback_packet.raw_bytes)
 
-            if response.data.get('qos') == 2:
-                # TODO add to qos message workflow
-                pass
-
         if response.command == packets.PUBACK_BYTE:
-            self.messages.acknowledge(
-                response.command, response.data.get('packet_id'))
+            # qos 1 acknowledgement
+            self.messages.acknowledge(1, response.data.get('packet_id'))
+
+        if response.command == packets.PUBREC_BYTE:
+            # qos 2 acknowledgement
+            # send PUBREL
+            self.messages.acknowledge(2, response.data.get('packet_id'))
+            pubrel_packet = self.pg.create_pubrel_packet(
+                response.data.get('packet_id'))
+            self.send(pubrel_packet.raw_bytes)
+
+        if response.command & 0xf0 == packets.PUBREL_BYTE:
+            # qos 2 acknowledgement
+            # SEND PUBCOMP
+            self.messages.acknowledge(2, response.data.get('packet_id'))
+            pubcomp_packet = self.pg.create_pubcomp_packet(
+                response.data.get('packet_id'))
+            self.send(pubcomp_packet.raw_bytes)
+
+        if response.command == packets.PUBCOMP_BYTE:
+            # qos 2 acknowledgement
+            # nothing to send
+            self.messages.acknowledge(2, response.data.get('packet_id'))
+            # TODO return message data so we can call on message here
+            # self.call_on_message(response.data.get('topic'),
+            #                      response.data.get('payload'))
 
         if response.command == packets.DISCONNECT_BYTE:
             self.connected = False

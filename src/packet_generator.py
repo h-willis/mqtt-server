@@ -5,6 +5,8 @@ Handles creation of mqtt packets to be sent including encoding length
 """
 
 
+# TODO do I run this through the packet_handler to both validate it and get us
+# a common object?
 class Packet:
     def __init__(self, command, raw_bytes, pid=None):
         self.command = command
@@ -114,6 +116,28 @@ class PacketGenerator:
 
     def create_puback_packet(self, pid):
         command_byte = bytes([packets.PUBACK_BYTE])
+        remaining_length = bytes([2])
+        raw_bytes = command_byte + remaining_length + pid.to_bytes(2, 'big')
+
+        return Packet(command_byte, raw_bytes, pid)
+
+    def create_pubrec_packet(self, pid):
+        command_byte = bytes([packets.PUBREC_BYTE])
+        remaining_length = bytes([2])
+        raw_bytes = command_byte + remaining_length + pid.to_bytes(2, 'big')
+
+        return Packet(command_byte, raw_bytes, pid)
+
+    def create_pubrel_packet(self, pid):
+        # lower nibble MUST be 0x02
+        command_byte = bytes([packets.PUBREL_BYTE | 0x02])
+        remaining_length = bytes([2])
+        raw_bytes = command_byte + remaining_length + pid.to_bytes(2, 'big')
+
+        return Packet(command_byte, raw_bytes, pid)
+
+    def create_pubcomp_packet(self, pid):
+        command_byte = bytes([packets.PUBCOMP_BYTE])
         remaining_length = bytes([2])
         raw_bytes = command_byte + remaining_length + pid.to_bytes(2, 'big')
 

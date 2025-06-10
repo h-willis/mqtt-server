@@ -59,7 +59,8 @@ class HandlerResponse:
         self.data = data if data is not None else {}
 
     def __str__(self):
-        return f'{COMMAND_BYTES[self.command]} | Data:\r\n{pformat(self.data)}'
+        # TODO fix this command bytes masking
+        return f'{COMMAND_BYTES[self.command & 0xf0]} | Data:\r\n{pformat(self.data)}'
 
 # TODO check through all this as GPT generated
 
@@ -71,10 +72,10 @@ class PacketHandler:
             packets.CONNECT_BYTE: self.handler_not_implemented,     # "CONNECT"
             packets.CONNACK_BYTE: self.handle_connack,              # "CONNACK"
             packets.PUBLISH_BYTE: self.handle_publish,              # "PUBLISH"
-            packets.PUBACK_BYTE: self.handle_puback,      # "PUBACK"
-            packets.PUBREC_BYTE: self.handler_not_implemented,      # "PUBREC"
-            packets.PUBREL_BYTE: self.handler_not_implemented,      # "PUBREL"
-            packets.PUBCOMP_BYTE: self.handler_not_implemented,     # "PUBCOMP"
+            packets.PUBACK_BYTE: self.handle_puback,                # "PUBACK"
+            packets.PUBREC_BYTE: self.handle_pubrec,                # "PUBREC"
+            packets.PUBREL_BYTE: self.handle_pubrel,                # "PUBREL"
+            packets.PUBCOMP_BYTE: self.handle_pubcomp,              # "PUBCOMP"
             packets.SUBSCRIBE_BYTE: self.handler_not_implemented,   # "SUBSCRIBE"
             packets.SUBACK_BYTE: self.handle_suback,                # "SUBACK"
             packets.UNSUBSCRIBE_BYTE: self.handler_not_implemented,  # "UNSUBSCRIBE"
@@ -231,6 +232,54 @@ class PacketHandler:
         # print(f"Received PUBACK for Packet ID: {packet_id}")
 
         return HandlerResponse(command=0x40, data={'packet_id': packet_id})
+
+    def handle_pubrec(self):
+        if len(self.packet) != 4:
+            raise PacketHandlerError("Invalid PUBREC packet length")
+
+        fixed_header = self.packet[0]
+        if fixed_header != 0x50:
+            raise PacketHandlerError("Invalid PUBREC packet header")
+
+        remaining_length = self.packet[1]
+        if remaining_length != 0x02:
+            raise PacketHandlerError("Invalid PUBREC remaining length")
+
+        packet_id = int.from_bytes(self.packet[2:], 'big')
+
+        return HandlerResponse(command=0x50, data={'packet_id': packet_id})
+
+    def handle_pubrel(self):
+        if len(self.packet) != 4:
+            raise PacketHandlerError("Invalid PUBREL packet length")
+
+        fixed_header = self.packet[0]
+        if fixed_header != 0x62:
+            raise PacketHandlerError("Invalid PUBREL packet header")
+
+        remaining_length = self.packet[1]
+        if remaining_length != 0x02:
+            raise PacketHandlerError("Invalid PUBREL remaining length")
+
+        packet_id = int.from_bytes(self.packet[2:], 'big')
+
+        return HandlerResponse(command=0x62, data={'packet_id': packet_id})
+
+    def handle_pubcomp(self):
+        if len(self.packet) != 4:
+            raise PacketHandlerError("Invalid PUBCOMP packet length")
+
+        fixed_header = self.packet[0]
+        if fixed_header != 0x70:
+            raise PacketHandlerError("Invalid PUBCOMP packet header")
+
+        remaining_length = self.packet[1]
+        if remaining_length != 0x02:
+            raise PacketHandlerError("Invalid PUBCOMP remaining length")
+
+        packet_id = int.from_bytes(self.packet[2:], 'big')
+
+        return HandlerResponse(command=0x70, data={'packet_id': packet_id})
 
     def handle_suback(self):
         if len(self.packet) < 5:
