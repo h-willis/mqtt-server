@@ -116,8 +116,11 @@ class PacketGenerator:
             variable_header + encoded_payload
         return Packet(command_byte, raw_bytes, int.from_bytes(pid, 'big'))
 
-    def create_puback_packet(self, pid):
-        command_byte = bytes([packets.PUBACK_BYTE])
+    def create_puback_packet(self, pid, dup=False):
+        command = packets.PUBACK_BYTE
+        if dup:
+            command |= packets.DUP_BIT
+        command_byte = bytes([command])
         remaining_length = bytes([2])
         raw_bytes = command_byte + remaining_length + pid.to_bytes(2, 'big')
 
