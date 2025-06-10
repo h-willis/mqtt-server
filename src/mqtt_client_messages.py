@@ -63,9 +63,12 @@ class MQTTClientQoS2Messages:
     def acknowledge(self, pid):
         print(f'acknowledging qos 2 {pid}: ', end='')
 
+        message = None
         try:
+            if self.messages[pid].state == 'PUBREC':
+                # store message for returning for calling on_message
+                message = self.messages[pid]
             self.messages[pid].advance_state()
-            print(self.messages[pid].state)
 
             if self.messages[pid].state == 'DONE':
                 print(f'Handshake complete for {pid}')
@@ -73,6 +76,8 @@ class MQTTClientQoS2Messages:
 
         except KeyError:
             print("Couldn't find pid")
+
+        return message
 
 
 class MQTTClientMessages:
@@ -92,6 +97,5 @@ class MQTTClientMessages:
 
     def acknowledge(self, qos, pid):
         if qos == 1:
-            self.qos_1_messages.acknowledge(pid)
-            return
-        self.qos_2_messages.acknowledge(pid)
+            return self.qos_1_messages.acknowledge(pid)
+        return self.qos_2_messages.acknowledge(pid)

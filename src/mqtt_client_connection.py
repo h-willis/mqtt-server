@@ -217,18 +217,22 @@ class MQTTClientConnection:
         if response.command & 0xf0 == packets.PUBREL_BYTE:
             # qos 2 acknowledgement
             # SEND PUBCOMP
-            self.messages.acknowledge(2, response.data.get('packet_id'))
             pubcomp_packet = self.pg.create_pubcomp_packet(
                 response.data.get('packet_id'))
             self.send(pubcomp_packet.raw_bytes)
+
+            message = self.messages.acknowledge(
+                2, response.data.get('packet_id'))
+
+            # here the handshake is complete for qos 2 messages so we can
+            # process it
+            self.call_on_message(message.packet.data.get('topic'),
+                                 message.packet.data.get('payload'))
 
         if response.command == packets.PUBCOMP_BYTE:
             # qos 2 acknowledgement
             # nothing to send
             self.messages.acknowledge(2, response.data.get('packet_id'))
-            # TODO return message data so we can call on message here
-            # self.call_on_message(response.data.get('topic'),
-            #                      response.data.get('payload'))
 
         if response.command == packets.DISCONNECT_BYTE:
             self.connected = False
