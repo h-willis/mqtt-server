@@ -75,7 +75,7 @@ class PacketGenerator:
 
         return packet_type_flag + remaining_length + variable_header + payload
 
-    def create_publish_packet(self, topic, payload, qos, retain):
+    def create_publish_packet(self, topic, payload, qos, retain, dup):
         print(f'Publishing {payload} to {topic} | {qos} | {retain}')
         # TODO flags (DUP)
         # TODO improve this
@@ -87,6 +87,8 @@ class PacketGenerator:
             command_byte |= packets.QOS_2_BITS
         if retain:
             command_byte |= packets.RETAIN_BIT
+        if dup:
+            command_byte |= packets.DUP_BIT
 
         print(f'Command byte {hex(command_byte)}')
 

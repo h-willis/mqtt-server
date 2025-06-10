@@ -127,13 +127,13 @@ class MQTTClientConnection:
 
         return data
 
-    def publish(self, topic, payload, qos, retain):
-        # TODO qos
+    def publish(self, topic, payload, qos, retain, dup=False):
         if not self.connected:
             print(f'Cant publish to {topic}, not connected to server')
             return
 
-        pub_packet = self.pg.create_publish_packet(topic, payload, qos, retain)
+        pub_packet = self.pg.create_publish_packet(
+            topic, payload, qos, retain, dup)
         if qos == 1:
             self.messages.add_qos_1(pub_packet)
         if qos == 2:
