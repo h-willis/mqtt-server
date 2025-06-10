@@ -95,7 +95,7 @@ if __name__ == '__main__':
             # client.publish('test/', 'test payload', 1)
             pass
         if publish_idx == 6:
-            client.publish('testpubqos2/', 1, 2)
+            client.publish('testpubqos2/', 1, 2, True)
         # if publish_idx == 9:
         #     # client.publish(1, 1)
         #     publish_idx = 0
