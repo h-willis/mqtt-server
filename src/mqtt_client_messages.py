@@ -2,6 +2,11 @@ from dataclasses import dataclass
 
 import packets
 
+STATE_PUBLISH = 'PUBLISH'
+STATE_PUBREC = 'PUBREC'
+STATE_PUBREL = 'PUBREL'
+STATE_DONE = 'DONE'
+
 
 class MQTTClientQoS1Messages:
     # TODO retry stale messages with increasing timeout
@@ -34,17 +39,16 @@ class QoS2Message:
 
     def advance_state(self):
         # this is tracking the last message sent rather than what is expected
-        # TODO define these strings
-        if self.state == 'PUBLISH':
-            self.state = 'PUBREL'
+        if self.state == STATE_PUBLISH:
+            self.state = STATE_PUBREL
             return
 
-        if self.state == 'PUBREC':
-            self.state = 'DONE'
+        if self.state == STATE_PUBREC:
+            self.state = STATE_DONE
             return
 
-        if self.state == 'PUBREL':
-            self.state = 'DONE'
+        if self.state == STATE_PUBREL:
+            self.state = STATE_DONE
             return
 
 
@@ -65,12 +69,13 @@ class MQTTClientQoS2Messages:
 
         message = None
         try:
-            if self.messages[pid].state == 'PUBREC':
+            if self.messages[pid].state == STATE_PUBREC:
                 # store message for returning for calling on_message
                 message = self.messages[pid]
+
             self.messages[pid].advance_state()
 
-            if self.messages[pid].state == 'DONE':
+            if self.messages[pid].state == STATE_DONE:
                 print(f'Handshake complete for {pid}')
                 del self.messages[pid]
 
@@ -92,7 +97,7 @@ class MQTTClientMessages:
     def add_qos_1(self, packet):
         self.qos_1_messages.add(packet)
 
-    def add_qos_2(self, packet, pid, state='PUBLISH'):
+    def add_qos_2(self, packet, pid, state=STATE_PUBLISH):
         self.qos_2_messages.add(packet, pid, state)
 
     def acknowledge(self, qos, pid):
