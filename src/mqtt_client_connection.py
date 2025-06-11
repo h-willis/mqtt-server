@@ -4,7 +4,7 @@ import string
 from time import sleep
 
 # packet stuff
-from packet_handler import PacketHandler, PacketHandlerError
+from packet_validator import PacketValidator, PacketValidatorError
 from packet_generator import PacketGenerator
 import packets
 
@@ -48,8 +48,10 @@ class MQTTClientConnection:
         server_response = self.negotiate_connection_to_server(timeout)
 
         try:
-            response = PacketHandler().handle_packet(server_response)
-        except PacketHandlerError as e:
+            # TODO actually check this is a connack packet
+            packet = PacketValidator().validate_packet(server_response)
+        except PacketValidatorError as e:
+            # invalid packet for some reason
             print(e.message)
             self.connected = False
             return
@@ -128,6 +130,7 @@ class MQTTClientConnection:
         return data
 
     def publish(self, topic, payload, qos, retain, dup=False):
+        # TODO dup might not be needed here
         if not self.connected:
             print(f'Cant publish to {topic}, not connected to server')
             return
@@ -135,9 +138,9 @@ class MQTTClientConnection:
         pub_packet = self.pg.create_publish_packet(
             topic, payload, qos, retain, dup)
         if qos == 1:
-            self.messages.add_qos_1(pub_packet)
+            self.messages.add(pub_packet)
         if qos == 2:
-            self.messages.add_qos_2(pub_packet, pub_packet.pid)
+            self.messages.add(pub_packet)
         self.send(pub_packet.raw_bytes)
 
     def subscribe(self, topic, qos):
@@ -165,76 +168,66 @@ class MQTTClientConnection:
                 return
 
             try:
-                # TODO come up with a better name for this
-                response = PacketHandler().handle_packet(data)
-                print(response)
-                self.handle_response(response)
-            except PacketHandlerError as e:
+                packet = PacketValidator().validate_packet(data)
+                print(packet)
+                self.handle_packet(packet)
+            except PacketValidatorError as e:
                 print(e)
 
-    def handle_response(self, response):
+    def handle_packet(self, packet):
         # TODO break this up
-        # print(f'Handling response: {response}')
-
-        if response.command == packets.CONNACK_BYTE:
+        if packet.command_type == packets.CONNACK_BYTE:
             # TODO This should only be in the initial handshake, move from here?
             self.call_on_connect()
 
-        if response.command == packets.PUBLISH_BYTE:
+        if packet.command_type == packets.PUBLISH_BYTE:
             # qos 2 first because we dont on on message until the handshake is complete
-            if response.data.get('qos') == 2:
-                self.messages.add_qos_2(
-                    response, response.data.get('packet_id'), 'PUBREC')
+            if packet.qos == 2:
+                self.messages.add(packet, 'PUBREC')
 
                 # we send PUBREC here and store message for handshake
-                pubrec_packet = self.pg.create_pubrec_packet(
-                    response.data.get('packet_id'))
+                pubrec_packet = self.pg.create_pubrec_packet(packet.packet_id)
                 self.send(pubrec_packet.raw_bytes)
                 return
 
             # messages received
-            self.call_on_message(response.data.get('topic'),
-                                 response.data.get('payload'))
+            self.call_on_message(packet.topic, packet.payload)
 
             # if qos 1 send puback
-            if response.data.get('qos') == 1:
-                puback_packet = self.pg.create_puback_packet(
-                    response.data.get('packet_id'))
+            if packet.qos == 1:
+                puback_packet = self.pg.create_puback_packet(packet.packet_id)
                 self.send(puback_packet.raw_bytes)
 
-        if response.command == packets.PUBACK_BYTE:
+        if packet.command_type == packets.PUBACK_BYTE:
             # qos 1 acknowledgement
-            self.messages.acknowledge(1, response.data.get('packet_id'))
+            self.messages.acknowledge(packet)
 
-        if response.command == packets.PUBREC_BYTE:
+        if packet.command_type == packets.PUBREC_BYTE:
             # qos 2 acknowledgement
             # send PUBREL
-            self.messages.acknowledge(2, response.data.get('packet_id'))
-            pubrel_packet = self.pg.create_pubrel_packet(
-                response.data.get('packet_id'))
+            self.messages.acknowledge(packet)
+            pubrel_packet = self.pg.create_pubrel_packet(packet.packet_id)
             self.send(pubrel_packet.raw_bytes)
+            if packet.command_type == packets.PUBREL_BYTE:
+                # qos 2 acknowledgement
+                # SEND PUBCOMP
+                pubcomp_packet = self.pg.create_pubcomp_packet(
+                    packet.packet_id)
+                self.send(pubcomp_packet.raw_bytes)
 
-        if response.command & 0xf0 == packets.PUBREL_BYTE:
-            # qos 2 acknowledgement
-            # SEND PUBCOMP
-            pubcomp_packet = self.pg.create_pubcomp_packet(
-                response.data.get('packet_id'))
-            self.send(pubcomp_packet.raw_bytes)
+                message = self.messages.acknowledge(packet)
 
-            message = self.messages.acknowledge(
-                2, response.data.get('packet_id'))
+                # here the handshake is complete for qos 2 messages so we can
+                # process it
+                self.call_on_message(message.packet.topic,
+                                     message.packet.payload)
 
-            # here the handshake is complete for qos 2 messages so we can
-            # process it
-            self.call_on_message(message.packet.data.get('topic'),
-                                 message.packet.data.get('payload'))
+            if packet.command_type == packets.PUBCOMP_BYTE:
+                # qos 2 acknowledgement
+                # nothing to send
+                self.messages.acknowledge(packet)
 
-        if response.command == packets.PUBCOMP_BYTE:
-            # qos 2 acknowledgement
-            # nothing to send
-            self.messages.acknowledge(2, response.data.get('packet_id'))
-
-        if response.command == packets.DISCONNECT_BYTE:
+        if packet.command_type == packets.DISCONNECT_BYTE:
             self.connected = False
             self.call_on_disconnect()
 
