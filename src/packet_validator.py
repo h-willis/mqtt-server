@@ -2,6 +2,8 @@
 import packets
 from pprint import pformat
 
+from mqtt_packet import MQTTPacket
+
 """
 1	    CONNECT	        Client request to connect to a broker.
 2	    CONNACK	        Connection acknowledgment from the broker.
@@ -46,26 +48,26 @@ COMMAND_BYTES = {
 }
 
 
-class PacketHandlerError(Exception):
+class PacketValidatorError(Exception):
     def __init__(self, message):
         self.message = message
         super().__init__(f"Error while handling packet: {message}")
 
 
-class HandlerResponse:
-    def __init__(self, command, data=None):
-        self.command = command
-        # topic, payload, pid
-        self.data = data if data is not None else {}
+# class HandlerResponse:
+#     def __init__(self, command, data=None):
+#         self.command = command
+#         # topic, payload, pid
+#         self.data = data if data is not None else {}
 
-    def __str__(self):
-        # TODO fix this command bytes masking
-        return f'{COMMAND_BYTES[self.command & 0xf0]} | Data:\r\n{pformat(self.data)}'
+#     def __str__(self):
+#         # TODO fix this command bytes masking
+#         return f'{COMMAND_BYTES[self.command & 0xf0]} | Data:\r\n{pformat(self.data)}'
 
 # TODO check through all this as GPT generated
 
 
-class PacketHandler:
+class PacketValidator:
     def __init__(self):
         self.packet = None
         self.handlers = {
@@ -86,7 +88,7 @@ class PacketHandler:
             packets.AUTH_BYTE: self.handler_not_implemented,        # "AUTH"
         }
 
-    def handle_packet(self, packet):
+    def validate_packet(self, packet):
         datapr = ', '.join(f"{byte:02x}" for byte in packet)
         print(f'recv {datapr}', end='')
 
@@ -94,7 +96,7 @@ class PacketHandler:
         self.packet = packet
         if not self.packet:
             print('\r')
-            raise PacketHandlerError("No packet to handle")
+            raise PacketValidatorError("No packet to handle")
 
         # masks out flags
         command = self.packet[0] & 0xf0
@@ -102,7 +104,7 @@ class PacketHandler:
         if command not in COMMAND_BYTES:
             # basically if it's 0
             print('\r')
-            raise PacketHandlerError("Invalid command byte")
+            raise PacketValidatorError("Invalid command byte")
 
         print(f' | {COMMAND_BYTES[command]}')
 
@@ -111,7 +113,7 @@ class PacketHandler:
     def handle_connack(self):
         # Check if the packet length is valid and it's a CONNACK packet
         if len(self.packet) < 4:
-            raise PacketHandlerError("Invalid packet length")
+            raise PacketValidatorError("Invalid packet length")
 
         # CONNACK format:
         # Byte 1: Fixed header (always 0x20 for CONNACK)
@@ -123,7 +125,7 @@ class PacketHandler:
         remaining_length = self.packet[1]
 
         if fixed_header != 0x20:
-            raise PacketHandlerError("Invalid CONNACK packet header")
+            raise PacketValidatorError("Invalid CONNACK packet header")
 
         # Get the response flags and return code
         response_flags = self.packet[2]
@@ -133,38 +135,39 @@ class PacketHandler:
         if return_code == 0x00:
             print("Connection Accepted")
         elif return_code == 0x01:
-            raise PacketHandlerError(
+            raise PacketValidatorError(
                 "Connection Refused - Unacceptable Protocol Version")
         elif return_code == 0x02:
-            raise PacketHandlerError(
+            raise PacketValidatorError(
                 "Connection Refused - Identifier Rejected")
         elif return_code == 0x03:
-            raise PacketHandlerError("Connection Refused - Broker Unavailable")
+            raise PacketValidatorError(
+                "Connection Refused - Broker Unavailable")
         elif return_code == 0x04:
-            raise PacketHandlerError(
+            raise PacketValidatorError(
                 "Connection Refused - Bad Username or Password")
         elif return_code == 0x05:
-            raise PacketHandlerError("Connection Refused - Not Authorized")
+            raise PacketValidatorError("Connection Refused - Not Authorized")
         else:
-            raise PacketHandlerError(f"Unknown return code: {return_code}")
+            raise PacketValidatorError(f"Unknown return code: {return_code}")
 
-        return HandlerResponse(command=0x20, data={'flags': response_flags})
+        return MQTTPacket(packets.CONNACK_BYTE, self.packet, data={'flags': response_flags})
 
     def handle_publish(self):
         if len(self.packet) < 4:
-            raise PacketHandlerError("Invalid PUBLISH packet length")
+            raise PacketValidatorError("Invalid PUBLISH packet length")
 
         fixed_header = self.packet[0]
         packet_type = fixed_header & 0xF0
         if packet_type != 0x30:
             # TODO not sure this check is required
-            raise PacketHandlerError("Invalid PUBLISH packet type")
+            raise PacketValidatorError("Invalid PUBLISH packet type")
 
         # Extract flags
         dup_flag = (fixed_header & 0x08) >> 3
         qos_level = (fixed_header & 0x06) >> 1
         if qos_level not in [0, 1, 2]:
-            raise PacketHandlerError(f"Invalid qos level: {qos_level}")
+            raise PacketValidatorError(f"Invalid qos level: {qos_level}")
         retain = fixed_header & 0x01
 
         # Decode Remaining Length (MQTT uses a variable-length encoding)
@@ -173,14 +176,14 @@ class PacketHandler:
         index = 1 + consumed_bytes
 
         if len(self.packet) < index + remaining_length:
-            raise PacketHandlerError("Incomplete PUBLISH packet")
+            raise PacketValidatorError("Incomplete PUBLISH packet")
 
         # Parse Topic Name
         topic_length = int.from_bytes(self.packet[index:index + 2], 'big')
         # topic_length = (self.packet[index] << 8) | self.packet[index + 1]
         index += 2
         if index + topic_length > len(self.packet):
-            raise PacketHandlerError("Incomplete topic in PUBLISH packet")
+            raise PacketValidatorError("Incomplete topic in PUBLISH packet")
 
         topic = self.packet[index:index + topic_length].decode('utf-8')
         index += topic_length
@@ -189,7 +192,7 @@ class PacketHandler:
         packet_id = None
         if qos_level > 0:
             if index + 2 > len(self.packet):
-                raise PacketHandlerError(
+                raise PacketValidatorError(
                     "Expected Packet Identifier missing for QoS > 0")
             # packet_id = (self.packet[index] << 8) | self.packet[index + 1]
             packet_id = int.from_bytes(self.packet[index:index + 2], 'big')
@@ -216,15 +219,15 @@ class PacketHandler:
 
     def handle_puback(self):
         if len(self.packet) != 4:
-            raise PacketHandlerError("Invalid PUBACK packet length")
+            raise PacketValidatorError("Invalid PUBACK packet length")
 
         fixed_header = self.packet[0]
         if fixed_header != 0x40:
-            raise PacketHandlerError("Invalid PUBACK packet header")
+            raise PacketValidatorError("Invalid PUBACK packet header")
 
         remaining_length = self.packet[1]
         if remaining_length != 0x02:
-            raise PacketHandlerError("Invalid PUBACK remaining length")
+            raise PacketValidatorError("Invalid PUBACK remaining length")
 
         packet_id = (self.packet[2] << 8) | self.packet[3]
         packet_id = int.from_bytes(self.packet[2:], 'big')
@@ -235,15 +238,15 @@ class PacketHandler:
 
     def handle_pubrec(self):
         if len(self.packet) != 4:
-            raise PacketHandlerError("Invalid PUBREC packet length")
+            raise PacketValidatorError("Invalid PUBREC packet length")
 
         fixed_header = self.packet[0]
         if fixed_header != 0x50:
-            raise PacketHandlerError("Invalid PUBREC packet header")
+            raise PacketValidatorError("Invalid PUBREC packet header")
 
         remaining_length = self.packet[1]
         if remaining_length != 0x02:
-            raise PacketHandlerError("Invalid PUBREC remaining length")
+            raise PacketValidatorError("Invalid PUBREC remaining length")
 
         packet_id = int.from_bytes(self.packet[2:], 'big')
 
@@ -251,15 +254,15 @@ class PacketHandler:
 
     def handle_pubrel(self):
         if len(self.packet) != 4:
-            raise PacketHandlerError("Invalid PUBREL packet length")
+            raise PacketValidatorError("Invalid PUBREL packet length")
 
         fixed_header = self.packet[0]
         if fixed_header != 0x62:
-            raise PacketHandlerError("Invalid PUBREL packet header")
+            raise PacketValidatorError("Invalid PUBREL packet header")
 
         remaining_length = self.packet[1]
         if remaining_length != 0x02:
-            raise PacketHandlerError("Invalid PUBREL remaining length")
+            raise PacketValidatorError("Invalid PUBREL remaining length")
 
         packet_id = int.from_bytes(self.packet[2:], 'big')
 
@@ -267,15 +270,15 @@ class PacketHandler:
 
     def handle_pubcomp(self):
         if len(self.packet) != 4:
-            raise PacketHandlerError("Invalid PUBCOMP packet length")
+            raise PacketValidatorError("Invalid PUBCOMP packet length")
 
         fixed_header = self.packet[0]
         if fixed_header != 0x70:
-            raise PacketHandlerError("Invalid PUBCOMP packet header")
+            raise PacketValidatorError("Invalid PUBCOMP packet header")
 
         remaining_length = self.packet[1]
         if remaining_length != 0x02:
-            raise PacketHandlerError("Invalid PUBCOMP remaining length")
+            raise PacketValidatorError("Invalid PUBCOMP remaining length")
 
         packet_id = int.from_bytes(self.packet[2:], 'big')
 
@@ -283,11 +286,11 @@ class PacketHandler:
 
     def handle_suback(self):
         if len(self.packet) < 5:
-            raise PacketHandlerError("Invalid SUBACK packet length")
+            raise PacketValidatorError("Invalid SUBACK packet length")
 
         fixed_header = self.packet[0]
         if fixed_header != 0x90:
-            raise PacketHandlerError("Invalid SUBACK packet header")
+            raise PacketValidatorError("Invalid SUBACK packet header")
 
         # Decode Remaining Length using the variable-length method
         remaining_length, consumed_bytes = self._decode_remaining_length(
@@ -295,7 +298,7 @@ class PacketHandler:
         index = 1 + consumed_bytes
 
         if len(self.packet) < index + remaining_length:
-            raise PacketHandlerError("Incomplete SUBACK packet")
+            raise PacketValidatorError("Incomplete SUBACK packet")
 
         # Packet Identifier (2 bytes)
         # packet_id = (self.packet[index] << 8) | self.packet[index + 1]
@@ -322,7 +325,7 @@ class PacketHandler:
         return HandlerResponse(command=packets.PINGRESP_BYTE)
 
     def handler_not_implemented(self):
-        raise PacketHandlerError('Handler not implemented')
+        raise PacketValidatorError('Handler not implemented')
 
     def _decode_remaining_length(self, data):
         """
@@ -344,7 +347,7 @@ class PacketHandler:
 
         while True:
             if index >= len(data):
-                raise PacketHandlerError(
+                raise PacketValidatorError(
                     "Malformed Remaining Length field: incomplete data")
 
             encoded_byte = data[index]
@@ -356,7 +359,7 @@ class PacketHandler:
             multiplier *= 128
             # equivalent to 128*128*128 (max allowed multiplier)
             if multiplier > 128**3:
-                raise PacketHandlerError(
+                raise PacketValidatorError(
                     "Malformed Remaining Length field: length too long")
 
             index += 1
