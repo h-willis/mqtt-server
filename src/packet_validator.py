@@ -96,7 +96,6 @@ class PacketValidator:
         # just look at top 4 bytes
         self.packet = packet
         if not self.packet:
-            print('\r')
             raise PacketValidatorError("No packet to handle")
 
         # masks out flags
@@ -104,7 +103,6 @@ class PacketValidator:
 
         if command not in COMMAND_BYTES:
             # basically if it's 0
-            print('\r')
             raise PacketValidatorError("Invalid command byte")
 
         print(f' | {COMMAND_BYTES[command]}')
