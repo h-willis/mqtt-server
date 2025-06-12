@@ -66,6 +66,8 @@ class MQTTClientConnection:
         # self.ping_thread.start()
 
     def call_on_connect(self):
+        self.messages.start_retry_thread()
+
         try:
             self.on_connect()
         except Exception as e:
@@ -73,6 +75,8 @@ class MQTTClientConnection:
             print(e)
 
     def call_on_disconnect(self):
+        self.messages.stop_retry_thread()
+
         try:
             self.on_disconnect()
         except Exception as e:
@@ -206,6 +210,8 @@ class MQTTClientConnection:
             # qos 2 acknowledgement
             # send PUBREL
             self.messages.acknowledge(packet)
+            # TODO this pubrel also needs to be stored in messages
+            # for reattempts
             pubrel_packet = self.pg.create_pubrel_packet(packet.packet_id)
             self.send(pubrel_packet.raw_bytes)
 
