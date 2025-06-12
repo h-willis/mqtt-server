@@ -1,6 +1,5 @@
-from dataclasses import dataclass
-
-import packets
+import threading
+import time
 
 STATE_PUBLISH = 'PUBLISH'
 STATE_PUBREC = 'PUBREC'
@@ -8,10 +7,47 @@ STATE_PUBREL = 'PUBREL'
 STATE_DONE = 'DONE'
 
 
+class QOS1Message:
+    def __init__(self, packet):
+        self.packet = packet
+        self.retries = 0
+        self.max_retries = 5
+        self.retry_interval = 2  # seconds
+        self.retry_backoff = 2  # seconds
+        self.next_retry_time = time.time() + self.retry_interval + 5
+
+    @property
+    def due_to_retry(self):
+        return time.time() >= self.next_retry_time
+
+    @property
+    def retries_exceeded(self):
+        return self.retries >= self.max_retries
+
+    def resend(self):
+        # here we need to set the DUP bit and resend the packet
+        self.packet.set_dup_bit()
+        self.packet.send()
+
+        self.handle_retries()
+        if self.retries >= self.max_retries:
+            print(
+                f'Max retries reached for packet {self.packet.packet_id}. Giving up.')
+            self.next_retry_time = 9999999999  # disable further retries
+
+    def handle_retries(self):
+        self.retries += 1
+        self.retry_interval *= self.retry_backoff  # double the retry interval
+        self.next_retry_time = time.time() + self.retry_interval
+
+    def increment_retry(self):
+        self.retries += 1
+
+
 class MQTTClientQoS1Messages:
     # TODO retry stale messages with increasing timeout
     def __init__(self):
-        self.packets = {}
+        self.messages = {}
 
     def add(self, packet):
         """ Takes packet info from 
@@ -20,36 +56,57 @@ class MQTTClientQoS1Messages:
             message (_type_): _description_
         """
         print(f'adding {packet}')
-        self.packets[packet.pid] = packet
+        message = QOS1Message(packet)
+        self.messages[packet.packet_id] = message
 
     def acknowledge(self, packet):
         print(f'acknowledging qos 1 {packet.packet_id}: ', end='')
 
         try:
-            del self.packets[packet.packet_id]
+            del self.messages[packet.packet_id]
             print('acknowledged')
         except KeyError:
             print("couldn't find pid")
 
+    def manage_retries(self):
+        """ Loop through messages and resend if not acknowledged """
+        for pid, message in list(self.messages.items()):
+            if message.due_to_retry:
+                print(f'Retrying QoS 1 message {pid}')
+                message.resend()
+                if message.retries_exceeded:
+                    print(
+                        f'Max retries exceeded for QoS 1 message {pid}. Removing from queue.')
+                    del self.messages[pid]
 
-class QoS2Message:
+
+class QoS2Message(QOS1Message):
     def __init__(self, packet, state):
-        self.packet = packet
+        super().__init__(packet)
         self.state = state
 
     def advance_state(self):
-        # this is tracking the last message sent rather than what is expected
+        # Advance the state machine for QoS 2 handshake
         if self.state == STATE_PUBLISH:
-            self.state = STATE_PUBREL
+            self.state = STATE_PUBREC
+            self.reset_retry()
             return
 
         if self.state == STATE_PUBREC:
-            self.state = STATE_DONE
+            self.state = STATE_PUBREL
+            self.reset_retry()
             return
 
         if self.state == STATE_PUBREL:
             self.state = STATE_DONE
+            self.reset_retry()
             return
+
+    def reset_retry(self):
+        # Reset retry counters and timers when state advances
+        self.retries = 0
+        self.retry_interval = 2
+        self.next_retry_time = time.time() + self.retry_interval
 
 
 class MQTTClientQoS2Messages:
@@ -84,17 +141,31 @@ class MQTTClientQoS2Messages:
 
         return message
 
+    def manage_retries(self):
+        """ Loop through messages and resend if not acknowledged """
+        for pid, message in list(self.messages.items()):
+            if message.due_to_retry:
+                print(f'Retrying QoS 2 message {pid} in state {message.state}')
+                message.resend()
+                if message.retries_exceeded:
+                    print(
+                        f'Max retries exceeded for QoS 2 message {pid}. Removing from queue.')
+                    del self.messages[pid]
+
 
 class MQTTClientMessages:
     """ When a message that requires acknowledgement is sent it's added to the
     list and a timer started for a reattempt at sending 
     """
 
-    def __init__(self, pg):
+    def __init__(self):
         self.qos_1_messages = MQTTClientQoS1Messages()
         self.qos_2_messages = MQTTClientQoS2Messages()
 
-        self.pg = pg
+        # TODO handle this thread better
+        self.background_thread = threading.Thread(
+            target=self.message_retry_thread)
+        # self.background_thread.start()
 
     def add(self, packet, state=STATE_PUBLISH):
         """ Add a packet to the appropriate QoS message list """
@@ -109,3 +180,12 @@ class MQTTClientMessages:
         if packet.qos == 1:
             return self.qos_1_messages.acknowledge(packet)
         return self.qos_2_messages.acknowledge(packet)
+
+    def message_retry_thread(self):
+        # Loop through messages and resend if not acknowledged
+        # Do qos 1 first as it is simpler
+        while True:
+            # TODO configure this
+            time.sleep(1)
+            self.qos_1_messages.manage_retries()
+            self.qos_2_messages.manage_retries()
