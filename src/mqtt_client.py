@@ -63,12 +63,12 @@ if __name__ == '__main__':
         print(f'ON MESSAGE Message recieved {topic}: {payload}')
 
     def connect_handler():
-        print('On connect called')
+        print('ON CONNECT called')
         client.subscribe('testsubqos2/', 2)
         client.start_loop()
 
     def disconnect_handler():
-        print('On disconnect called')
+        print('ON DISCONNECT called')
         client.connect()
 
     client.set_on_message_callback(message_handler)
@@ -84,7 +84,7 @@ if __name__ == '__main__':
     publish_idx = 0
 
     while True:
-        print('we still here...')
+        # print('we still here...')
         sleep(1)
 
         if not client.connected:

@@ -48,6 +48,4 @@ class MQTTPacket:
         if not self.send_func:
             return
 
-        print('Sending', end=' ')
-        print('\\x'.join(f"{byte:02x}" for byte in self.raw_bytes))
         self.send_func(self.raw_bytes)
