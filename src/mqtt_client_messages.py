@@ -122,7 +122,7 @@ class MQTTClientQoS2Messages:
         self.messages[packet.packet_id] = QoS2Message(packet, state)
 
     def acknowledge(self, packet):
-        print(f'acknowledging qos 2 {packet.packet_id}: ', end='')
+        print(f'acknowledging qos 2 id:{packet.packet_id} : ', end='')
 
         message = None
         try:
@@ -131,6 +131,7 @@ class MQTTClientQoS2Messages:
                 message = self.messages[packet.packet_id]
 
             self.messages[packet.packet_id].advance_state()
+            print('State advanced')
 
             if self.messages[packet.packet_id].state == STATE_DONE:
                 print(f'Handshake complete for {packet.packet_id}')
@@ -165,7 +166,21 @@ class MQTTClientMessages:
         # TODO handle this thread better
         self.background_thread = threading.Thread(
             target=self.message_retry_thread)
-        # self.background_thread.start()
+
+    def start_retry_thread(self):
+        print("Starting retry thread...")
+        if not self.background_thread.is_alive():
+            self.background_thread.start()
+        else:
+            print("Retry thread is already running.")
+
+    def stop_retry_thread(self):
+        print("Stopping retry thread...")
+        if self.background_thread.is_alive():
+            self.background_thread.join(timeout=1)
+            print("Retry thread stopped.")
+        else:
+            print("Retry thread is not running.")
 
     def add(self, packet, state=STATE_PUBLISH):
         """ Add a packet to the appropriate QoS message list """
@@ -184,6 +199,8 @@ class MQTTClientMessages:
     def message_retry_thread(self):
         # Loop through messages and resend if not acknowledged
         # Do qos 1 first as it is simpler
+        print('RETRY THREAD SKIPPED')
+        return
         while True:
             # TODO configure this
             time.sleep(1)
