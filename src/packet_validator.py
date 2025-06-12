@@ -108,7 +108,8 @@ class PacketValidator:
 
         print(f' | {COMMAND_BYTES[command]}')
 
-        return self.handlers[command]()
+        handler = self.handlers[command]
+        return handler()
 
     def handle_connack(self):
         # Check if the packet length is valid and it's a CONNACK packet
@@ -151,7 +152,7 @@ class PacketValidator:
         else:
             raise PacketValidatorError(f"Unknown return code: {return_code}")
 
-        return MQTTPacket(packets.CONNACK_BYTE, self.packet, data={'flags': response_flags})
+        return MQTTPacket(fixed_header, self.packet, data={'flags': response_flags})
 
     def handle_publish(self):
         if len(self.packet) < 4:
@@ -205,8 +206,9 @@ class PacketValidator:
         except UnicodeDecodeError:
             payload = payload_bytes  # fallback to raw bytes if not UTF-8
 
-        return HandlerResponse(
-            command=0x30,
+        return MQTTPacket(
+            fixed_header,
+            self.packet,
             data={
                 'topic': topic,
                 'payload': payload,
@@ -234,7 +236,7 @@ class PacketValidator:
 
         # print(f"Received PUBACK for Packet ID: {packet_id}")
 
-        return HandlerResponse(command=0x40, data={'packet_id': packet_id})
+        return MQTTPacket(fixed_header, self.packet, data={'packet_id': packet_id})
 
     def handle_pubrec(self):
         if len(self.packet) != 4:
@@ -250,7 +252,7 @@ class PacketValidator:
 
         packet_id = int.from_bytes(self.packet[2:], 'big')
 
-        return HandlerResponse(command=0x50, data={'packet_id': packet_id})
+        return MQTTPacket(fixed_header, self.packet, data={'packet_id': packet_id})
 
     def handle_pubrel(self):
         if len(self.packet) != 4:
@@ -266,7 +268,7 @@ class PacketValidator:
 
         packet_id = int.from_bytes(self.packet[2:], 'big')
 
-        return HandlerResponse(command=0x62, data={'packet_id': packet_id})
+        return MQTTPacket(fixed_header, self.packet, data={'packet_id': packet_id})
 
     def handle_pubcomp(self):
         if len(self.packet) != 4:
@@ -282,7 +284,7 @@ class PacketValidator:
 
         packet_id = int.from_bytes(self.packet[2:], 'big')
 
-        return HandlerResponse(command=0x70, data={'packet_id': packet_id})
+        return MQTTPacket(fixed_header, self.packet, data={'packet_id': packet_id})
 
     def handle_suback(self):
         if len(self.packet) < 5:
@@ -312,8 +314,9 @@ class PacketValidator:
         # print(
         #     f"Received SUBACK: Packet ID={packet_id}, Return Codes={return_codes}")
 
-        return HandlerResponse(
-            command=0x90,
+        return MQTTPacket(
+            fixed_header,
+            self.packet,
             data={
                 'packet_id': packet_id,
                 'return_codes': return_codes,
@@ -322,7 +325,7 @@ class PacketValidator:
 
     def handle_pingresp(self):
         print("TODO somehow use this for the client to know when it's connection is dead")
-        return HandlerResponse(command=packets.PINGRESP_BYTE)
+        return MQTTPacket(self.packet[0], self.packet)
 
     def handler_not_implemented(self):
         raise PacketValidatorError('Handler not implemented')

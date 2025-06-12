@@ -1,20 +1,9 @@
 import packets
+from mqtt_packet import MQTTPacket
 
 """
 Handles creation of mqtt packets to be sent including encoding length
 """
-
-
-# TODO do I run this through the packet_handler to both validate it and get us
-# a common object?
-class Packet:
-    def __init__(self, command, raw_bytes, pid=None):
-        self.command = command
-        self.raw_bytes = raw_bytes
-        self.pid = pid
-
-    def __str__(self):
-        return f'{self.command} | {self.pid}'
 
 
 class PacketGenerator:
@@ -54,7 +43,7 @@ class PacketGenerator:
         return encoded
 
     def create_connect_packet(self, keep_alive=60, client_id=None):
-        # TODO connect flags, username, password, protocol name
+        # TODO connect flags, username, password, protocol name, lwt
         protocol_name = self._encode_string_with_length('MQTT')
         protocol_level = bytes([0x04])  # MQTT 3.1.1
 
@@ -69,15 +58,16 @@ class PacketGenerator:
         # TODO check client_id
         payload = self._encode_string_with_length(client_id)
 
-        packet_type_flag = bytes([packets.CONNECT_BYTE])  # connect packet flag
+        command_byte = bytes([packets.CONNECT_BYTE])  # connect packet flag
         remaining_length = self._encode_remaining_length(
             len(variable_header) + len(payload))
 
-        return packet_type_flag + remaining_length + variable_header + payload
+        raw_bytes = command_byte + remaining_length + variable_header + payload
+        # I dont think we need any of this returned in the data field
+        return MQTTPacket(command_byte, raw_bytes)
 
     def create_publish_packet(self, topic, payload, qos, retain, dup):
         print(f'Publishing {payload} to {topic} | {qos} | {retain}')
-        # TODO flags (DUP)
         # TODO improve this
         command_byte = packets.PUBLISH_BYTE
 
@@ -92,8 +82,7 @@ class PacketGenerator:
 
         print(f'Command byte {hex(command_byte)}')
 
-        # TODO is this the best way to do this?
-        packet_type_flag = bytes([command_byte])
+        command_byte = bytes([command_byte])
 
         variable_header = self._encode_string_with_length(topic)
 
@@ -112,9 +101,17 @@ class PacketGenerator:
         remaining_length = self._encode_remaining_length(
             len(variable_header) + payload_length)
 
-        raw_bytes = packet_type_flag + remaining_length + \
+        raw_bytes = command_byte + remaining_length + \
             variable_header + encoded_payload
-        return Packet(command_byte, raw_bytes, int.from_bytes(pid, 'big'))
+
+        return MQTTPacket(command_byte, raw_bytes, data={
+            'topic': topic,
+            'payload': payload,
+            'qos': qos,
+            'retain': retain,
+            'dup': dup,
+            'packet_id': int.from_bytes(pid, 'big') if pid else None
+        })
 
     def create_puback_packet(self, pid, dup=False):
         command = packets.PUBACK_BYTE
@@ -124,14 +121,14 @@ class PacketGenerator:
         remaining_length = bytes([2])
         raw_bytes = command_byte + remaining_length + pid.to_bytes(2, 'big')
 
-        return Packet(command_byte, raw_bytes, pid)
+        return MQTTPacket(command_byte, raw_bytes, data={'packet_id': pid})
 
     def create_pubrec_packet(self, pid):
         command_byte = bytes([packets.PUBREC_BYTE])
         remaining_length = bytes([2])
         raw_bytes = command_byte + remaining_length + pid.to_bytes(2, 'big')
 
-        return Packet(command_byte, raw_bytes, pid)
+        return MQTTPacket(command_byte, raw_bytes, data={'packet_id': pid})
 
     def create_pubrel_packet(self, pid):
         # lower nibble MUST be 0x02
@@ -139,14 +136,14 @@ class PacketGenerator:
         remaining_length = bytes([2])
         raw_bytes = command_byte + remaining_length + pid.to_bytes(2, 'big')
 
-        return Packet(command_byte, raw_bytes, pid)
+        return MQTTPacket(command_byte, raw_bytes, data={'packet_id': pid})
 
     def create_pubcomp_packet(self, pid):
         command_byte = bytes([packets.PUBCOMP_BYTE])
         remaining_length = bytes([2])
         raw_bytes = command_byte + remaining_length + pid.to_bytes(2, 'big')
 
-        return Packet(command_byte, raw_bytes, pid)
+        return MQTTPacket(command_byte, raw_bytes, data={'packet_id': pid})
 
     def create_subscribe_packet(self, topic, qos=0):
         print(f'Subscribing to {topic} at QoS:{qos}')
@@ -160,9 +157,14 @@ class PacketGenerator:
             len(packet_id) + len(encoded_topic))
 
         # lower nibble must be 2 on subscribe command bytes
-        packet_type_flag = bytes([packets.SUBSCRIBE_BYTE & 0xf2])
+        command_byte = bytes([packets.SUBSCRIBE_BYTE & 0xf2])
 
-        return packet_type_flag + remaining_length + packet_id + encoded_topic
+        raw_bytes = command_byte + remaining_length + packet_id + encoded_topic
+        return MQTTPacket(command_byte, raw_bytes, data={
+            'packet_id': int.from_bytes(packet_id, 'big'),
+            'topic': topic,
+            'qos': qos
+        })
 
     def get_packet_id_bytes(self, start=1):
         # pid cant be 0 so must start at 1
