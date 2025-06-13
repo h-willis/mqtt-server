@@ -1,10 +1,10 @@
 import threading
 import time
 
-STATE_PUBLISH = 'PUBLISH'
-STATE_PUBREC = 'PUBREC'
-STATE_PUBREL = 'PUBREL'
-STATE_DONE = 'DONE'
+WAIT_FOR_PUBREC = 'WAIT_FOR_PUBREC'
+WAIT_FOR_PUBREL = 'WAIT_FOR_PUBREL'
+WAIT_FOR_PUBCOMP = 'WAIT_FOR_PUBCOMP'
+DONE = 'DONE'
 
 
 class QOS1Message:
@@ -84,29 +84,32 @@ class QoS2Message(QOS1Message):
     def __init__(self, packet, state):
         super().__init__(packet)
         self.state = state
+        self.dup = False
 
     def advance_state(self):
-        # Advance the state machine for QoS 2 handshake
-        if self.state == STATE_PUBLISH:
-            self.state = STATE_PUBREC
+        if self.state == WAIT_FOR_PUBREC:
+            # we have sent the PUBLISH packet and are waiting for PUBREC
+            self.state = WAIT_FOR_PUBCOMP
             self.reset_retry()
             return
 
-        if self.state == STATE_PUBREC:
-            self.state = STATE_PUBREL
-            self.reset_retry()
+        if self.state == WAIT_FOR_PUBCOMP:
+            # we have sent the PUBREL packet and are waiting for PUBCOMP
+            self.state = DONE
             return
 
-        if self.state == STATE_PUBREL:
-            self.state = STATE_DONE
+        if self.state == WAIT_FOR_PUBREL:
+            # we have sent the PUBREC packet and are waiting for PUBREL
+            self.state = DONE
             self.reset_retry()
             return
 
     def reset_retry(self):
-        # Reset retry counters and timers when state advances
+        # reset retry counters and timers when state advances
         self.retries = 0
         self.retry_interval = 2
         self.next_retry_time = time.time() + self.retry_interval
+        self.dup = False
 
 
 class MQTTClientQoS2Messages:
@@ -182,7 +185,7 @@ class MQTTClientMessages:
         else:
             print("Retry thread is not running.")
 
-    def add(self, packet, state=STATE_PUBLISH):
+    def add(self, packet, state=WAIT_FOR_PUBREC):
         """ Add a packet to the appropriate QoS message list """
         if packet.qos == 1:
             self.qos_1_messages.add(packet)
