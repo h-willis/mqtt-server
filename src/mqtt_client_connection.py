@@ -141,11 +141,9 @@ class MQTTClientConnection:
             return
 
         pub_packet = self.pg.create_publish_packet(topic, payload, qos, retain)
-        if qos == 1:
+        if qos > 0:
             self.messages.add(pub_packet)
-        if qos == 2:
-            self.messages.add(pub_packet)
-        self.send(pub_packet.raw_bytes)
+        pub_packet.send()
 
     def subscribe(self, topic, qos):
         if not self.connected:
