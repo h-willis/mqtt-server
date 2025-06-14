@@ -104,6 +104,26 @@ class QoS2Message(QOS1Message):
             self.reset_retry()
             return
 
+    def resend(self):
+        # resend here is a matter of which state we're in
+        if self.state == WAIT_FOR_PUBREC:
+            print(f'Resending PUBLISH packet {self.packet.packet_id}')
+            self.packet.set_dup_bit()
+            self.packet.send()
+            self.increase_retries()
+        elif self.state == WAIT_FOR_PUBREL:
+            print(f'Resending PUBREC packet {self.packet.packet_id}')
+            self.packet.set_dup_bit()
+            self.packet.send()
+            self.increase_retries()
+        elif self.state == WAIT_FOR_PUBCOMP:
+            print(f'Resending PUBREL packet {self.packet.packet_id}')
+            self.packet.set_dup_bit()
+            self.packet.send()
+            self.increase_retries()
+        elif self.state == DONE:
+            return
+
     def reset_retry(self):
         # reset retry counters and timers when state advances
         self.retries = 0
