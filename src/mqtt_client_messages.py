@@ -29,13 +29,13 @@ class QOS1Message:
         self.packet.set_dup_bit()
         self.packet.send()
 
-        self.handle_retries()
+        self.increase_retries()
         if self.retries >= self.max_retries:
             print(
                 f'Max retries reached for packet {self.packet.packet_id}. Giving up.')
             self.next_retry_time = 9999999999  # disable further retries
 
-    def handle_retries(self):
+    def increase_retries(self):
         self.retries += 1
         self.retry_interval *= self.retry_backoff  # double the retry interval
         self.next_retry_time = time.time() + self.retry_interval
