@@ -123,22 +123,29 @@ class PacketGenerator:
 
         return MQTTPacket(command_byte, raw_bytes, data={'packet_id': pid}, send_func=self.send_func)
 
-    def create_pubrec_packet(self, pid):
-        command_byte = bytes([packets.PUBREC_BYTE])
+    def create_pubrec_packet(self, pid, dup=False):
+        command = packets.PUBREC_BYTE
+        if dup:
+            command |= packets.DUP_BIT
+        command_byte = bytes([command])
         remaining_length = bytes([2])
         raw_bytes = command_byte + remaining_length + pid.to_bytes(2, 'big')
 
         return MQTTPacket(command_byte, raw_bytes, data={'packet_id': pid}, send_func=self.send_func)
 
-    def create_pubrel_packet(self, pid):
-        # lower nibble MUST be 0x02
-        command_byte = bytes([packets.PUBREL_BYTE | 0x02])
+    def create_pubrel_packet(self, pid, dup=False):
+        command = packets.PUBREL_BYTE
+        if dup:
+            command |= packets.DUP_BIT
+        # lower nibble MUST be 0x02 according to MQTT spec
+        command_byte = bytes([command | 0x02])
         remaining_length = bytes([2])
         raw_bytes = command_byte + remaining_length + pid.to_bytes(2, 'big')
 
         return MQTTPacket(command_byte, raw_bytes, data={'packet_id': pid}, send_func=self.send_func)
 
     def create_pubcomp_packet(self, pid):
+        # no DUP bit for PUBCOMP
         command_byte = bytes([packets.PUBCOMP_BYTE])
         remaining_length = bytes([2])
         raw_bytes = command_byte + remaining_length + pid.to_bytes(2, 'big')
