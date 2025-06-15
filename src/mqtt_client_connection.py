@@ -26,9 +26,11 @@ class MQTTClientConnection:
         self.on_message = lambda topic, payload: None
 
         # needs to be instance to handle increasing packet ids
+        # send is attached to packets so we need to pass it here
         self.pg = PacketGenerator(self.send)
         self.validator = PacketValidator(self.send)
 
+        # pg is used to create and resend dup packets in qos handshakes
         self.messages = MQTTClientMessages()
 
     def generate_random_client_id(self):
@@ -185,11 +187,7 @@ class MQTTClientConnection:
         if packet.command_type == packets.PUBLISH_BYTE:
             # qos 2 first because we dont on on message until the handshake is complete
             if packet.qos == 2:
-                self.messages.add(packet, 'PUBREC')
-
-                # we send PUBREC here and store message for handshake
-                pubrec_packet = self.pg.create_pubrec_packet(packet.packet_id)
-                pubrec_packet.send()
+                self.messages.add(packet, True)
                 return
 
             # messages received
@@ -206,26 +204,15 @@ class MQTTClientConnection:
 
         if packet.command_type == packets.PUBREC_BYTE:
             # qos 2 acknowledgement
-            # send PUBREL
             self.messages.acknowledge(packet)
-            # TODO this pubrel also needs to be stored in messages
-            # for reattempts
-            pubrel_packet = self.pg.create_pubrel_packet(packet.packet_id)
-            self.send(pubrel_packet.raw_bytes)
 
         if packet.command_type == packets.PUBREL_BYTE:
             # qos 2 acknowledgement
-            # SEND PUBCOMP
-            pubcomp_packet = self.pg.create_pubcomp_packet(
-                packet.packet_id)
-            self.send(pubcomp_packet.raw_bytes)
-
             message = self.messages.acknowledge(packet)
 
             # here the handshake is complete for qos 2 messages so we can
             # process it
-            self.call_on_message(message.packet.topic,
-                                 message.packet.payload)
+            self.call_on_message(message.packet.topic, message.packet.payload)
 
         if packet.command_type == packets.PUBCOMP_BYTE:
             # qos 2 acknowledgement
@@ -237,6 +224,7 @@ class MQTTClientConnection:
             self.call_on_disconnect()
 
     def send(self, data):
+        # TODO is this thread safe?
         print('Sending', end=' ')
         print('\\x'.join(f"{byte:02x}" for byte in data))
         self.conn.sendall(data)

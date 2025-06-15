@@ -1,9 +1,24 @@
 import threading
 import time
+import packets
+
+# seeing as this will only be used to genearte qos 2 handshake packets we dont
+# need the reference to the client packet generator as we dont need the
+# incrementing packet id
+from packet_generator import PacketGenerator as pg
 
 WAIT_FOR_PUBREC = 'WAIT_FOR_PUBREC'
 WAIT_FOR_PUBREL = 'WAIT_FOR_PUBREL'
 WAIT_FOR_PUBCOMP = 'WAIT_FOR_PUBCOMP'
+
+PUBLISHED = 'PUBLISHED'
+PUBRECCED = 'PUBRECCED'
+PUBRELLED = 'PUBRELLED'
+
+SEND_PUBLISH = 'SEND_PUBLISH'
+SEND_PUBREC = 'SEND_PUBREC'
+SEND_PUBREL = 'SEND_PUBREL'
+SEND_PUBCOMP = 'SEND_PUBCOMP'
 DONE = 'DONE'
 
 
@@ -86,6 +101,20 @@ class QoS2Message(QOS1Message):
         self.state = state
         self.dup = False
 
+    def acknowledge(self, incoming_packet):
+        if self.state == WAIT_FOR_PUBREC:
+            if incoming_packet.command_type == packets.PUBREC_BYTE:
+                self.advance_state()
+                return
+            # here we could also check if we have
+
+        if self.state == WAIT_FOR_PUBREL:
+            if incoming_packet.command_type == packets.PUBREL_BYTE:
+                self.advance_state()
+            if incoming_packet.command_type == packets.PUBCOMP_BYTE:
+
+                # here we could also check if we have received a PUBREC packet
+
     def advance_state(self):
         if self.state == WAIT_FOR_PUBREC:
             # we have sent the PUBLISH packet and are waiting for PUBREC
@@ -105,22 +134,26 @@ class QoS2Message(QOS1Message):
             return
 
     def resend(self):
-        # resend here is a matter of which state we're in
+        # resend is a matter of which state we're in
         if self.state == WAIT_FOR_PUBREC:
             print(f'Resending PUBLISH packet {self.packet.packet_id}')
             self.packet.set_dup_bit()
             self.packet.send()
             self.increase_retries()
+
         elif self.state == WAIT_FOR_PUBREL:
+            # TODO improve this
             print(f'Resending PUBREC packet {self.packet.packet_id}')
-            self.packet.set_dup_bit()
-            self.packet.send()
+            pg(self.packet.send_func).create_pubrec_packet(
+                self.packet.packet_id, dup=True).send()
             self.increase_retries()
+
         elif self.state == WAIT_FOR_PUBCOMP:
             print(f'Resending PUBREL packet {self.packet.packet_id}')
-            self.packet.set_dup_bit()
-            self.packet.send()
+            pg(self.packet.send_func).create_pubrel_packet(
+                self.packet.packet_id, dup=True).send()
             self.increase_retries()
+
         elif self.state == DONE:
             return
 
@@ -141,10 +174,17 @@ class MQTTClientQoS2Messages:
     def __init__(self):
         self.messages = {}
 
-    def add(self, packet, state):
+    def add(self, packet, received=False):
+        # packet should only be a publish packet
+        state = WAIT_FOR_PUBREL if received else WAIT_FOR_PUBREC
+        if received:
+            # send the PUBREC packet
+            pg(packet.send_func).create_pubrec_packet(
+                packet.packet_id, dup=False).send()
         self.messages[packet.packet_id] = QoS2Message(packet, state)
 
     def acknowledge(self, packet):
+        # here we either advance state or send the packet with the dup bit set
         print(f'acknowledging qos 2 id:{packet.packet_id} : ', end='')
 
         message = None
