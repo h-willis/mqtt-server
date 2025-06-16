@@ -96,66 +96,99 @@ class MQTTClientQoS1Messages:
 
 
 class QoS2Message(QOS1Message):
+    """ State machine for controlling QoS 2 messages.
+    The state machine transmits a message for the first time on state transitions
+    allowing for easier retransmission in the current state.
+
+    Args:
+        QOS1Message (_type_): Base class that contains most of the retry logic
+        packet (_type_): The packet of the PUBLISH message we are doing the 
+        handshake for. Can be sent or received packet.
+    """
+
     def __init__(self, packet, state):
         super().__init__(packet)
         self.state = state
-        self.dup = False
 
     def acknowledge(self, incoming_packet):
-        if self.state == WAIT_FOR_PUBREC:
+        if self.state == SEND_PUBLISH:
+            # we are sending a PUBLISH packet, so we expect a PUBREC packet
             if incoming_packet.command_type == packets.PUBREC_BYTE:
+                print(f'Received PUBREC for {self.packet.packet_id}')
+                # send a PUBREL packet
+                pg(self.packet.send_func).create_pubrel_packet(
+                    self.packet.packet_id, dup=True).send()
                 self.advance_state()
                 return
-            # here we could also check if we have
 
-        if self.state == WAIT_FOR_PUBREL:
-            if incoming_packet.command_type == packets.PUBREL_BYTE:
-                self.advance_state()
+        if self.state == SEND_PUBREL:
+            # we are sending a PUBREL packet, so we expect a PUBCOMP packet
             if incoming_packet.command_type == packets.PUBCOMP_BYTE:
+                print(f'Received PUBCOMP for {self.packet.packet_id}')
+                self.advance_state()
+                return
+            # we could also receive a PUBREC packet here, which means we need to
+            # resend the PUBREL packet with the dup bit set
+            if incoming_packet.command_type == packets.PUBREC_BYTE:
+                # TODO do we check for a dup bit?
+                self.resend()
+                return
 
-                # here we could also check if we have received a PUBREC packet
+        if self.state == SEND_PUBREC:
+            # we are expecting a PUBREL packet, so we send a PUBCOMP packet
+            if incoming_packet.command_type == packets.PUBREL_BYTE:
+                print(f'Received PUBREL for {self.packet.packet_id}')
+                pg(self.packet.send_func).create_pubcomp_packet(
+                    self.packet.packet_id).send()
+                self.advance_state()
+                return
+            # we can also receive the publish packet here, which means we need to
+            # resend the PUBREC packet with the dup bit set
+            if incoming_packet.command_type == packets.PUBLISH_BYTE:
+                print(f'Received PUBLISH for {self.packet.packet_id}')
+                self.resend()
+                return
 
     def advance_state(self):
-        if self.state == WAIT_FOR_PUBREC:
-            # we have sent the PUBLISH packet and are waiting for PUBREC
-            self.state = WAIT_FOR_PUBCOMP
-            self.reset_retry()
+        if self.state == SEND_PUBLISH:
+            # first state for messages we are sending
+            # we change state when we receive a PUBREC packet
+            self.state = SEND_PUBREL
             return
 
-        if self.state == WAIT_FOR_PUBCOMP:
-            # we have sent the PUBREL packet and are waiting for PUBCOMP
+        if self.state == SEND_PUBREL:
+            # we change state when we receive a PUBCOMP packet
+            # at wich point we are done with the message
             self.state = DONE
             return
 
-        if self.state == WAIT_FOR_PUBREL:
-            # we have sent the PUBREC packet and are waiting for PUBREL
+        if self.state == SEND_PUBREC:
+            # first state for messages we are receiving
+            # we change state when we receive a PUBREL packet after which we
+            # process the message
+            # any further PUBREC packets will be responeded to with PUBCOMP
             self.state = DONE
-            self.reset_retry()
             return
 
     def resend(self):
-        # resend is a matter of which state we're in
-        if self.state == WAIT_FOR_PUBREC:
-            print(f'Resending PUBLISH packet {self.packet.packet_id}')
-            self.packet.set_dup_bit()
+        # depends on what state we're in
+        if self.state == SEND_PUBLISH:
+            # resend the publish packet with dup bit set
+            print(f'Resending PUBLISH for {self.packet.packet_id}')
+            self.packet.set_dup_bit(True)
             self.packet.send()
-            self.increase_retries()
 
-        elif self.state == WAIT_FOR_PUBREL:
-            # TODO improve this
-            print(f'Resending PUBREC packet {self.packet.packet_id}')
+        if self.state == SEND_PUBREC:
+            # resend the PUBREC packet with dup bit set
+            print(f'Resending PUBREC for {self.packet.packet_id}')
             pg(self.packet.send_func).create_pubrec_packet(
                 self.packet.packet_id, dup=True).send()
-            self.increase_retries()
 
-        elif self.state == WAIT_FOR_PUBCOMP:
-            print(f'Resending PUBREL packet {self.packet.packet_id}')
+        if self.state == SEND_PUBREL:
+            # resend the PUBREL packet with dup bit set
+            print(f'Resending PUBREL for {self.packet.packet_id}')
             pg(self.packet.send_func).create_pubrel_packet(
                 self.packet.packet_id, dup=True).send()
-            self.increase_retries()
-
-        elif self.state == DONE:
-            return
 
     def reset_retry(self):
         # reset retry counters and timers when state advances
@@ -176,8 +209,15 @@ class MQTTClientQoS2Messages:
 
     def add(self, packet, received=False):
         # packet should only be a publish packet
-        state = WAIT_FOR_PUBREL if received else WAIT_FOR_PUBREC
+        # we could already have it if it's a retransmission
+        # assume we've sent the message
+        state = SEND_PUBLISH
+
         if received:
+            state = SEND_PUBREC
+            if packet.dup:
+                self.messages[packet.packet_id].resend()
+                return
             # send the PUBREC packet
             pg(packet.send_func).create_pubrec_packet(
                 packet.packet_id, dup=False).send()
@@ -189,14 +229,12 @@ class MQTTClientQoS2Messages:
 
         message = None
         try:
-            if self.messages[packet.packet_id].state == STATE_PUBREC:
-                # store message for returning for calling on_message
-                message = self.messages[packet.packet_id]
-
             self.messages[packet.packet_id].advance_state()
             print('State advanced')
 
-            if self.messages[packet.packet_id].state == STATE_DONE:
+            if self.messages[packet.packet_id].state == DONE:
+                # store message for returning it for processing
+                message = self.messages[packet.packet_id]
                 print(f'Handshake complete for {packet.packet_id}')
                 del self.messages[packet.packet_id]
 
