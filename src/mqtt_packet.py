@@ -40,6 +40,10 @@ class MQTTPacket:
     def payload(self):
         return self.data.get('payload', None)
 
+    @property
+    def dup(self):
+        return (self.command_byte & 0x08) != 0
+
     def set_dup_bit(self):
         """ Sets the DUP bit in the command byte """
         self.command_byte |= 0x08
