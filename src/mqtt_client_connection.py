@@ -185,15 +185,17 @@ class MQTTClientConnection:
             self.call_on_connect()
 
         if packet.command_type == packets.PUBLISH_BYTE:
-            # qos 2 first because we dont on on message until the handshake is complete
+            # qos 2 first because we dont call on message until the handshake
+            # is complete
             if packet.qos == 2:
-                self.messages.add(packet, True)
+                received = True
+                self.messages.add(packet, received)
                 return
 
             # messages received
             self.call_on_message(packet.topic, packet.payload)
 
-            # if qos 1 send puback
+            # if qos 1 send puback regardless, no dup bit required
             if packet.qos == 1:
                 puback_packet = self.pg.create_puback_packet(packet.packet_id)
                 self.send(puback_packet.raw_bytes)

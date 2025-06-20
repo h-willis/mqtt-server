@@ -7,14 +7,6 @@ import packets
 # incrementing packet id
 from packet_generator import PacketGenerator as pg
 
-WAIT_FOR_PUBREC = 'WAIT_FOR_PUBREC'
-WAIT_FOR_PUBREL = 'WAIT_FOR_PUBREL'
-WAIT_FOR_PUBCOMP = 'WAIT_FOR_PUBCOMP'
-
-PUBLISHED = 'PUBLISHED'
-PUBRECCED = 'PUBRECCED'
-PUBRELLED = 'PUBRELLED'
-
 SEND_PUBLISH = 'SEND_PUBLISH'
 SEND_PUBREC = 'SEND_PUBREC'
 SEND_PUBREL = 'SEND_PUBREL'
@@ -152,13 +144,16 @@ class QoS2Message(QOS1Message):
     def advance_state(self):
         if self.state == SEND_PUBLISH:
             # first state for messages we are sending
-            # we change state when we receive a PUBREC packet
+            # we change state when we receive a PUBREC packet and send a pubrel
+            pg(self.packet.send_func).create_pubrel_packet(
+                self.packet.packet_id).send()
             self.state = SEND_PUBREL
             return
 
         if self.state == SEND_PUBREL:
             # we change state when we receive a PUBCOMP packet
-            # at wich point we are done with the message
+            # at which point we are done with the message
+            # we wait in this state so we can resend the PUBREL packet with the dup bit set
             self.state = DONE
             return
 
@@ -166,7 +161,9 @@ class QoS2Message(QOS1Message):
             # first state for messages we are receiving
             # we change state when we receive a PUBREL packet after which we
             # process the message
-            # any further PUBREC packets will be responeded to with PUBCOMP
+            # any further PUBREL packets will be responeded to with PUBCOMP
+            pg(self.packet.send_func).create_pubcomp_packet(
+                self.packet.packet_id).send()
             self.state = DONE
             return
 
@@ -207,7 +204,7 @@ class MQTTClientQoS2Messages:
     def __init__(self):
         self.messages = {}
 
-    def add(self, packet, received=False):
+    def add(self, packet, received):
         # packet should only be a publish packet
         # we could already have it if it's a retransmission
         # assume we've sent the message
@@ -222,10 +219,11 @@ class MQTTClientQoS2Messages:
             pg(packet.send_func).create_pubrec_packet(
                 packet.packet_id, dup=False).send()
         self.messages[packet.packet_id] = QoS2Message(packet, state)
+        print(f'Adding QoS 2 message {packet.packet_id} with state {state}')
 
     def acknowledge(self, packet):
         # here we either advance state or send the packet with the dup bit set
-        print(f'acknowledging qos 2 id:{packet.packet_id} : ', end='')
+        print(f'acknowledging qos 2 id:{packet.packet_id} ', end='')
 
         message = None
         try:
@@ -240,6 +238,11 @@ class MQTTClientQoS2Messages:
 
         except KeyError:
             print("Couldn't find pid")
+            # if this is a PUBREL we need to send the PUBCOMP regardless
+            if packet.command_type == packets.PUBREL_BYTE:
+                print(f'Sending PUBCOMP for {packet.packet_id}')
+                pg(packet.send_func).create_pubcomp_packet(
+                    packet.packet_id).send()
 
         return message
 
@@ -265,12 +268,13 @@ class MQTTClientMessages:
         self.qos_2_messages = MQTTClientQoS2Messages()
 
         # TODO handle this thread better
-        self.background_thread = threading.Thread(
-            target=self.message_retry_thread)
+        self.background_thread = None
 
     def start_retry_thread(self):
         print("Starting retry thread...")
-        if not self.background_thread.is_alive():
+        if self.background_thread is None:
+            self.background_thread = threading.Thread(
+                target=self.message_retry_thread)
             self.background_thread.start()
         else:
             print("Retry thread is already running.")
@@ -282,13 +286,14 @@ class MQTTClientMessages:
             print("Retry thread stopped.")
         else:
             print("Retry thread is not running.")
+        self.background_thread = None
 
-    def add(self, packet, state=WAIT_FOR_PUBREC):
+    def add(self, packet, received=False):
         """ Add a packet to the appropriate QoS message list """
         if packet.qos == 1:
             self.qos_1_messages.add(packet)
         elif packet.qos == 2:
-            self.qos_2_messages.add(packet, state)
+            self.qos_2_messages.add(packet, received)
         else:
             print(f'Unknown QoS {packet.qos} for {packet}')
 

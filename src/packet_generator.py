@@ -2,7 +2,7 @@ import packets
 from mqtt_packet import MQTTPacket
 
 """
-Handles creation of mqtt packets to be sent including encoding length
+Handles creation of mqtt packets to be sent including 
 """
 
 
