@@ -1,11 +1,14 @@
+from packet_generator import PacketGenerator as pg
 import threading
 import time
 import packets
 
+from logger_setup import LoggerSetup
+logger = LoggerSetup.get_logger(__name__)
+
 # seeing as this will only be used to genearte qos 2 handshake packets we dont
 # need the reference to the client packet generator as we dont need the
 # incrementing packet id
-from packet_generator import PacketGenerator as pg
 
 SEND_PUBLISH = 'SEND_PUBLISH'
 SEND_PUBREC = 'SEND_PUBREC'
@@ -38,7 +41,7 @@ class QOS1Message:
 
         self.increase_retries()
         if self.retries >= self.max_retries:
-            print(
+            logger.warning(
                 f'Max retries reached for packet {self.packet.packet_id}. Giving up.')
             self.next_retry_time = 9999999999  # disable further retries
 
@@ -62,27 +65,27 @@ class MQTTClientQoS1Messages:
         Args:
             message (_type_): _description_
         """
-        print(f'adding {packet}')
+        logger.debug(f'Adding QoS 1 message {packet}')
         message = QOS1Message(packet)
         self.messages[packet.packet_id] = message
 
     def acknowledge(self, packet):
-        print(f'acknowledging qos 1 {packet.packet_id}: ', end='')
-
+        logger.debug(f'Acknowledging QoS 1 message {packet.packet_id}')
         try:
             del self.messages[packet.packet_id]
-            print('acknowledged')
+            logger.info(f'QoS 1 message {packet.packet_id} acknowledged')
         except KeyError:
-            print("couldn't find pid")
+            logger.warning(
+                f"Couldn't find QoS 1 message with pid {packet.packet_id}")
 
     def manage_retries(self):
         """ Loop through messages and resend if not acknowledged """
         for pid, message in list(self.messages.items()):
             if message.due_to_retry:
-                print(f'Retrying QoS 1 message {pid}')
+                logger.info(f'Retrying QoS 1 message {pid}')
                 message.resend()
                 if message.retries_exceeded:
-                    print(
+                    logger.warning(
                         f'Max retries exceeded for QoS 1 message {pid}. Removing from queue.')
                     del self.messages[pid]
 
@@ -106,7 +109,7 @@ class QoS2Message(QOS1Message):
         if self.state == SEND_PUBLISH:
             # we are sending a PUBLISH packet, so we expect a PUBREC packet
             if incoming_packet.command_type == packets.PUBREC_BYTE:
-                print(f'Received PUBREC for {self.packet.packet_id}')
+                logger.info(f'Received PUBREC for {self.packet.packet_id}')
                 # send a PUBREL packet
                 pg(self.packet.send_func).create_pubrel_packet(
                     self.packet.packet_id, dup=True).send()
@@ -116,20 +119,22 @@ class QoS2Message(QOS1Message):
         if self.state == SEND_PUBREL:
             # we are sending a PUBREL packet, so we expect a PUBCOMP packet
             if incoming_packet.command_type == packets.PUBCOMP_BYTE:
-                print(f'Received PUBCOMP for {self.packet.packet_id}')
+                logger.info(f'Received PUBCOMP for {self.packet.packet_id}')
                 self.advance_state()
                 return
             # we could also receive a PUBREC packet here, which means we need to
             # resend the PUBREL packet with the dup bit set
             if incoming_packet.command_type == packets.PUBREC_BYTE:
                 # TODO do we check for a dup bit?
+                logger.info(
+                    f'Received PUBREC for {self.packet.packet_id} while waiting for PUBCOMP, resending PUBREL')
                 self.resend()
                 return
 
         if self.state == SEND_PUBREC:
             # we are expecting a PUBREL packet, so we send a PUBCOMP packet
             if incoming_packet.command_type == packets.PUBREL_BYTE:
-                print(f'Received PUBREL for {self.packet.packet_id}')
+                logger.info(f'Received PUBREL for {self.packet.packet_id}')
                 pg(self.packet.send_func).create_pubcomp_packet(
                     self.packet.packet_id).send()
                 self.advance_state()
@@ -137,7 +142,8 @@ class QoS2Message(QOS1Message):
             # we can also receive the publish packet here, which means we need to
             # resend the PUBREC packet with the dup bit set
             if incoming_packet.command_type == packets.PUBLISH_BYTE:
-                print(f'Received PUBLISH for {self.packet.packet_id}')
+                logger.info(
+                    f'Received PUBLISH for {self.packet.packet_id} while waiting for PUBREL, resending PUBREC')
                 self.resend()
                 return
 
@@ -148,6 +154,8 @@ class QoS2Message(QOS1Message):
             pg(self.packet.send_func).create_pubrel_packet(
                 self.packet.packet_id).send()
             self.state = SEND_PUBREL
+            logger.debug(
+                f'Advanced state to SEND_PUBREL for {self.packet.packet_id}')
             return
 
         if self.state == SEND_PUBREL:
@@ -155,6 +163,7 @@ class QoS2Message(QOS1Message):
             # at which point we are done with the message
             # we wait in this state so we can resend the PUBREL packet with the dup bit set
             self.state = DONE
+            logger.debug(f'Advanced state to DONE for {self.packet.packet_id}')
             return
 
         if self.state == SEND_PUBREC:
@@ -165,25 +174,26 @@ class QoS2Message(QOS1Message):
             pg(self.packet.send_func).create_pubcomp_packet(
                 self.packet.packet_id).send()
             self.state = DONE
+            logger.debug(f'Advanced state to DONE for {self.packet.packet_id}')
             return
 
     def resend(self):
         # depends on what state we're in
         if self.state == SEND_PUBLISH:
             # resend the publish packet with dup bit set
-            print(f'Resending PUBLISH for {self.packet.packet_id}')
+            logger.info(f'Resending PUBLISH for {self.packet.packet_id}')
             self.packet.set_dup_bit(True)
             self.packet.send()
 
         if self.state == SEND_PUBREC:
             # resend the PUBREC packet with dup bit set
-            print(f'Resending PUBREC for {self.packet.packet_id}')
+            logger.info(f'Resending PUBREC for {self.packet.packet_id}')
             pg(self.packet.send_func).create_pubrec_packet(
                 self.packet.packet_id, dup=True).send()
 
         if self.state == SEND_PUBREL:
             # resend the PUBREL packet with dup bit set
-            print(f'Resending PUBREL for {self.packet.packet_id}')
+            logger.info(f'Resending PUBREL for {self.packet.packet_id}')
             pg(self.packet.send_func).create_pubrel_packet(
                 self.packet.packet_id, dup=True).send()
 
@@ -213,34 +223,39 @@ class MQTTClientQoS2Messages:
         if received:
             state = SEND_PUBREC
             if packet.dup:
+                logger.info(
+                    f'Received duplicate PUBLISH for {packet.packet_id}, resending PUBREC')
                 self.messages[packet.packet_id].resend()
                 return
             # send the PUBREC packet
             pg(packet.send_func).create_pubrec_packet(
                 packet.packet_id, dup=False).send()
         self.messages[packet.packet_id] = QoS2Message(packet, state)
-        print(f'Adding QoS 2 message {packet.packet_id} with state {state}')
+        logger.debug(
+            f'Adding QoS 2 message {packet.packet_id} with state {state}')
 
     def acknowledge(self, packet):
         # here we either advance state or send the packet with the dup bit set
-        print(f'acknowledging qos 2 id:{packet.packet_id} ', end='')
+        logger.debug(f'Acknowledging QoS 2 message id:{packet.packet_id}')
 
         message = None
         try:
             self.messages[packet.packet_id].advance_state()
-            print('State advanced')
+            logger.info(f'State advanced for QoS 2 message {packet.packet_id}')
 
             if self.messages[packet.packet_id].state == DONE:
                 # store message for returning it for processing
                 message = self.messages[packet.packet_id]
-                print(f'Handshake complete for {packet.packet_id}')
+                logger.info(
+                    f'Handshake complete for QoS 2 message {packet.packet_id}')
                 del self.messages[packet.packet_id]
 
         except KeyError:
-            print("Couldn't find pid")
+            logger.warning(
+                f"Couldn't find QoS 2 message with pid {packet.packet_id}")
             # if this is a PUBREL we need to send the PUBCOMP regardless
             if packet.command_type == packets.PUBREL_BYTE:
-                print(f'Sending PUBCOMP for {packet.packet_id}')
+                logger.info(f'Sending PUBCOMP for {packet.packet_id}')
                 pg(packet.send_func).create_pubcomp_packet(
                     packet.packet_id).send()
 
@@ -250,10 +265,11 @@ class MQTTClientQoS2Messages:
         """ Loop through messages and resend if not acknowledged """
         for pid, message in list(self.messages.items()):
             if message.due_to_retry:
-                print(f'Retrying QoS 2 message {pid} in state {message.state}')
+                logger.info(
+                    f'Retrying QoS 2 message {pid} in state {message.state}')
                 message.resend()
                 if message.retries_exceeded:
-                    print(
+                    logger.warning(
                         f'Max retries exceeded for QoS 2 message {pid}. Removing from queue.')
                     del self.messages[pid]
 
@@ -271,21 +287,21 @@ class MQTTClientMessages:
         self.background_thread = None
 
     def start_retry_thread(self):
-        print("Starting retry thread...")
+        logger.info("Starting retry thread...")
         if self.background_thread is None:
             self.background_thread = threading.Thread(
                 target=self.message_retry_thread)
             self.background_thread.start()
         else:
-            print("Retry thread is already running.")
+            logger.warning("Retry thread is already running.")
 
     def stop_retry_thread(self):
-        print("Stopping retry thread...")
+        logger.info("Stopping retry thread...")
         if self.background_thread.is_alive():
             self.background_thread.join(timeout=1)
-            print("Retry thread stopped.")
+            logger.info("Retry thread stopped.")
         else:
-            print("Retry thread is not running.")
+            logger.warning("Retry thread is not running.")
         self.background_thread = None
 
     def add(self, packet, received=False):
@@ -295,7 +311,7 @@ class MQTTClientMessages:
         elif packet.qos == 2:
             self.qos_2_messages.add(packet, received)
         else:
-            print(f'Unknown QoS {packet.qos} for {packet}')
+            logger.warning(f'Unknown QoS {packet.qos} for {packet}')
 
     def acknowledge(self, packet):
         if packet.qos == 1:
@@ -305,7 +321,7 @@ class MQTTClientMessages:
     def message_retry_thread(self):
         # Loop through messages and resend if not acknowledged
         # Do qos 1 first as it is simpler
-        print('RETRY THREAD SKIPPED')
+        logger.debug('RETRY THREAD SKIPPED')
         return
         while True:
             # TODO configure this
