@@ -257,7 +257,7 @@ class PacketValidator:
 
         packet_id = int.from_bytes(self.packet[2:], 'big')
 
-        logger.info(f"Received PUBREC for Packet ID: {packet_id}"))
+        logger.info(f"Received PUBREC for Packet ID: {packet_id}")
 
         return MQTTPacket(fixed_header, self.packet, data={'packet_id': packet_id}, send_func=self.send_func)
 
@@ -275,7 +275,7 @@ class PacketValidator:
 
         packet_id = int.from_bytes(self.packet[2:], 'big')
 
-        logger.info(f"Received PUBREL for Packet ID: {packet_id}"))
+        logger.info(f"Received PUBREL for Packet ID: {packet_id}")
 
         return MQTTPacket(fixed_header, self.packet, data={'packet_id': packet_id}, send_func=self.send_func)
 
@@ -293,7 +293,7 @@ class PacketValidator:
 
         packet_id = int.from_bytes(self.packet[2:], 'big')
 
-        logger.info(f"Received PUBCOMP for Packet ID: {packet_id}"))
+        logger.info(f"Received PUBCOMP for Packet ID: {packet_id}")
 
         return MQTTPacket(fixed_header, self.packet, data={'packet_id': packet_id}, send_func=self.send_func)
 

@@ -3,7 +3,7 @@ import threading
 import time
 import packets
 
-from logger_setup import LoggerSetup
+from logging_setup import LoggerSetup
 logger = LoggerSetup.get_logger(__name__)
 
 # seeing as this will only be used to genearte qos 2 handshake packets we dont

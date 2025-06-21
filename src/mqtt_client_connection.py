@@ -9,7 +9,7 @@ from packet_generator import PacketGenerator
 import packets
 
 from mqtt_client_messages import MQTTClientMessages
-from logger_setup import LoggerSetup
+from logging_setup import LoggerSetup
 logger = LoggerSetup.get_logger(__name__)
 
 
