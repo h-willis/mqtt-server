@@ -9,6 +9,8 @@ from packet_generator import PacketGenerator
 import packets
 
 from mqtt_client_messages import MQTTClientMessages
+from logger_setup import LoggerSetup
+logger = LoggerSetup.get_logger(__name__)
 
 
 class MQTTClientConnection:
@@ -37,14 +39,14 @@ class MQTTClientConnection:
         return 'PYMQTTClient-'.join(random.choices(string.ascii_letters + string.digits, k=8))
 
     def connect(self, timeout):
-        print('Attempting to connect to MQTT server')
+        logger.info('Attempting to connect to MQTT server')
 
         if not self.connect_socket_to_server(timeout):
             self.connected = False
-            print('Failed to connect to server')
+            logger.error('Failed to connect to server')
             return
 
-        print(
+        logger.info(
             f'Client: {self.client_id} connected to {self.address}:{self.port}')
 
         # TODO this could be better
@@ -55,11 +57,11 @@ class MQTTClientConnection:
             packet = self.validator.validate_packet(server_response)
         except PacketValidatorError as e:
             # invalid packet for some reason
-            print(e.message)
+            logger.error(e.message)
             self.connected = False
             return
 
-        print('We connected!')
+        logger.info('We connected!')
         self.connected = True
         self.call_on_connect()
 
@@ -73,8 +75,8 @@ class MQTTClientConnection:
         try:
             self.on_connect()
         except Exception as e:
-            print('Error while calling on_connect callback:')
-            print(e)
+            logger.error('Error while calling on_connect callback:')
+            logger.exception(e)
 
     def call_on_disconnect(self):
         self.messages.stop_retry_thread()
@@ -82,15 +84,15 @@ class MQTTClientConnection:
         try:
             self.on_disconnect()
         except Exception as e:
-            print('Error while calling on_disconnect callback:')
-            print(e)
+            logger.error('Error while calling on_disconnect callback:')
+            logger.exception(e)
 
     def call_on_message(self, topic=None, payload=None):
         try:
             self.on_message(topic, payload)
         except Exception as e:
-            print('Error while calling on_message callback:')
-            print({e})
+            logger.error('Error while calling on_message callback:')
+            logger.exception(e)
 
     def socket_connected(self):
         try:
@@ -124,12 +126,11 @@ class MQTTClientConnection:
 
         try:
             connect_packet.send()
-            print('Connection packet sent, waiting for response...', end='')
-
+            logger.debug('Connection packet sent, waiting for response...')
             self.conn.settimeout(timeout)
             data = self.conn.recv(4)
         except TimeoutError:
-            print('No response from server.')
+            logger.warning('No response from server.')
             return None
         finally:
             self.conn.settimeout(None)
@@ -139,7 +140,7 @@ class MQTTClientConnection:
     def publish(self, topic, payload, qos, retain):
         # TODO dup might not be needed here
         if not self.connected:
-            print(f'Cant publish to {topic}, not connected to server')
+            logger.warning(f'Cant publish to {topic}, not connected to server')
             return
 
         pub_packet = self.pg.create_publish_packet(topic, payload, qos, retain)
@@ -149,14 +150,15 @@ class MQTTClientConnection:
 
     def subscribe(self, topic, qos):
         if not self.connected:
-            print(f'Cant subscribe to {topic}, not connected to server')
+            logger.warning(
+                f'Cant subscribe to {topic}, not connected to server')
             return
 
         sub_packet = self.pg.create_subscribe_packet(topic, qos)
         sub_packet.send()
 
     def loop(self):
-        print('Entering loop')
+        logger.info('Entering loop')
         while True:
             # TODO read more data if this isnt long enough
             # read a bunch more until no more data, or construct the bytes-left
@@ -168,15 +170,15 @@ class MQTTClientConnection:
                 self.connected = False
                 self.call_on_disconnect()
             if not self.connected:
-                print(f'{self.client_id} Disconnected')
+                logger.info(f'{self.client_id} Disconnected')
                 return
 
             try:
                 packet = self.validator.validate_packet(data)
-                print(packet)
+                logger.debug(packet)
                 self.handle_packet(packet)
             except PacketValidatorError as e:
-                print(e)
+                logger.error(e)
 
     def handle_packet(self, packet):
         # TODO break this up
@@ -227,8 +229,7 @@ class MQTTClientConnection:
 
     def send(self, data):
         # TODO is this thread safe?
-        print('Sending', end=' ')
-        print('\\x'.join(f"{byte:02x}" for byte in data))
+        logger.debug('Sending %s', '\\x'.join(f"{byte:02x}" for byte in data))
         self.conn.sendall(data)
 
         # def ping_manager(self):
