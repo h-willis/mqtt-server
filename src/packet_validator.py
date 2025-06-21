@@ -3,6 +3,8 @@ import packets
 from pprint import pformat
 
 from mqtt_packet import MQTTPacket
+from logging_setup import LoggerSetup
+logger = LoggerSetup.get_logger(__name__)
 
 """
 1	    CONNECT	        Client request to connect to a broker.
@@ -91,7 +93,7 @@ class PacketValidator:
 
     def validate_packet(self, packet):
         datapr = ', '.join(f"{byte:02x}" for byte in packet)
-        print(f'recv {datapr}', end='')
+        logger.debug(f'recv {datapr}')
 
         # just look at top 4 bytes
         self.packet = packet
@@ -105,7 +107,8 @@ class PacketValidator:
             # basically if it's 0
             raise PacketValidatorError("Invalid command byte")
 
-        print(f' | {COMMAND_BYTES[command]}')
+        logger.info(f'Received packet type: {COMMAND_BYTES[command]}', extra={
+                    'event': 'packet_type'})
 
         handler = self.handlers[command]
         return handler()
@@ -133,7 +136,7 @@ class PacketValidator:
 
         # Check return code and print the result
         if return_code == 0x00:
-            print("Connection Accepted")
+            logger.info("Connection Accepted", extra={'event': 'connack'})
         elif return_code == 0x01:
             raise PacketValidatorError(
                 "Connection Refused - Unacceptable Protocol Version")
@@ -205,6 +208,9 @@ class PacketValidator:
         except UnicodeDecodeError:
             payload = payload_bytes  # fallback to raw bytes if not UTF-8
 
+        logger.info(
+            f"PUBLISH packet: topic={topic}, qos={qos_level}, dup={dup_flag}, retain={retain}, packet_id={packet_id}")
+
         return MQTTPacket(
             fixed_header,
             self.packet,
@@ -233,7 +239,7 @@ class PacketValidator:
         packet_id = (self.packet[2] << 8) | self.packet[3]
         packet_id = int.from_bytes(self.packet[2:], 'big')
 
-        # print(f"Received PUBACK for Packet ID: {packet_id}")
+        logger.info(f"Received PUBACK for Packet ID: {packet_id}")
 
         return MQTTPacket(fixed_header, self.packet, data={'packet_id': packet_id}, send_func=self.send_func)
 
@@ -251,6 +257,8 @@ class PacketValidator:
 
         packet_id = int.from_bytes(self.packet[2:], 'big')
 
+        logger.info(f"Received PUBREC for Packet ID: {packet_id}"))
+
         return MQTTPacket(fixed_header, self.packet, data={'packet_id': packet_id}, send_func=self.send_func)
 
     def handle_pubrel(self):
@@ -267,6 +275,8 @@ class PacketValidator:
 
         packet_id = int.from_bytes(self.packet[2:], 'big')
 
+        logger.info(f"Received PUBREL for Packet ID: {packet_id}"))
+
         return MQTTPacket(fixed_header, self.packet, data={'packet_id': packet_id}, send_func=self.send_func)
 
     def handle_pubcomp(self):
@@ -282,6 +292,8 @@ class PacketValidator:
             raise PacketValidatorError("Invalid PUBCOMP remaining length")
 
         packet_id = int.from_bytes(self.packet[2:], 'big')
+
+        logger.info(f"Received PUBCOMP for Packet ID: {packet_id}"))
 
         return MQTTPacket(fixed_header, self.packet, data={'packet_id': packet_id}, send_func=self.send_func)
 
@@ -310,8 +322,8 @@ class PacketValidator:
         # TODO more readable
         return_codes = list(self.packet[index:index + (remaining_length - 2)])
 
-        # print(
-        #     f"Received SUBACK: Packet ID={packet_id}, Return Codes={return_codes}")
+        logger.info(
+            f"Received SUBACK: Packet ID={packet_id}, Return Codes={return_codes}")
 
         return MQTTPacket(
             fixed_header,
@@ -323,10 +335,12 @@ class PacketValidator:
         )
 
     def handle_pingresp(self):
-        print("TODO somehow use this for the client to know when it's connection is dead")
+        logger.info("Received PINGRESP")
+        # TODO this isnt the response I dont think...
         return MQTTPacket(self.packet[0], self.packet, send_func=self.send_func)
 
     def handler_not_implemented(self):
+        logger.warning('Handler not implemented for this packet type')
         raise PacketValidatorError('Handler not implemented')
 
     def _decode_remaining_length(self, data):

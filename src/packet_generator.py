@@ -1,5 +1,7 @@
 import packets
 from mqtt_packet import MQTTPacket
+from logging_setup import LoggerSetup
+logger = LoggerSetup.get_logger(__name__)
 
 """
 Handles creation of mqtt packets to be sent including 
@@ -68,7 +70,8 @@ class PacketGenerator:
         return MQTTPacket(command_byte, raw_bytes, send_func=self.send_func)
 
     def create_publish_packet(self, topic, payload, qos, retain):
-        print(f'Publishing {payload} to {topic} | {qos} | {retain}')
+        logger.info(
+            f'Publishing {payload} to {topic} | QoS: {qos} | Retain: {retain}')
         # TODO improve this
         command_byte = packets.PUBLISH_BYTE
 
@@ -81,7 +84,7 @@ class PacketGenerator:
         # if dup:
         #     command_byte |= packets.DUP_BIT
 
-        print(f'Command byte {hex(command_byte)}')
+        logger.debug(f'Command byte {hex(command_byte)}')
 
         command_byte = bytes([command_byte])
 
@@ -93,7 +96,7 @@ class PacketGenerator:
             pid = next(self.pid_generator)
             variable_header += pid
 
-        print(variable_header)
+        logger.debug(f'Variable header: {variable_header}')
 
         # NOTE could add config here to allow for numbers encoded as bytes?
         encoded_payload = str(payload).encode('utf-8')
@@ -153,7 +156,7 @@ class PacketGenerator:
         return MQTTPacket(command_byte, raw_bytes, data={'packet_id': pid}, send_func=self.send_func)
 
     def create_subscribe_packet(self, topic, qos=0):
-        print(f'Subscribing to {topic} at QoS:{qos}')
+        logger.info(f'Subscribing to {topic} at QoS: {qos}')
         # TODO list of topics
         encoded_topic = self._encode_string_with_length(topic)
         encoded_topic += bytes([qos])
