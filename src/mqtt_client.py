@@ -1,7 +1,12 @@
+from mqtt_client_connection import MQTTClientConnection
 from time import sleep
 import threading
 
-from mqtt_client_connection import MQTTClientConnection
+from logging_setup import LoggerSetup
+import logging  # for initial log level
+LoggerSetup.setup(log_level=logging.DEBUG)
+logger = LoggerSetup.get_logger(__name__)
+logger.debug('MQTT Client module initialized')
 
 # TODO handle shutdown gracefully and kill threads
 
@@ -35,14 +40,14 @@ class MQTTClient:
 
     def publish(self, topic=None, payload=None, qos=0, retain=False):
         if qos > 2 or qos < 0:
-            print(f'Invalid qos value {qos}')
+            logger.error('Invalid qos value in publish %s', qos)
             return
 
         self.connection.publish(topic, payload, qos, retain)
 
     def subscribe(self, topic, qos=0):
         if qos > 2 or qos < 0:
-            print(f'Invalid qos value {qos}')
+            logger.error('Invalid qos value in subscribe %s', qos)
             return
 
         self.connection.subscribe(topic, qos)
@@ -60,15 +65,15 @@ if __name__ == '__main__':
     client = MQTTClient('localhost', 1883, 'PYMQTTClient-00000000')
 
     def message_handler(topic, payload):
-        print(f'ON MESSAGE Message recieved {topic}: {payload}')
+        logger.debug('ON MESSAGE Message recieved %s: %s', topic, payload)
 
     def connect_handler():
-        print('ON CONNECT called')
+        logger.debug('ON CONNECT called')
         client.subscribe('testsubqos2/', 2)
         client.start_loop()
 
     def disconnect_handler():
-        print('ON DISCONNECT called')
+        logger.debug('ON DISCONNECT called')
         client.connect()
 
     client.set_on_message_callback(message_handler)
