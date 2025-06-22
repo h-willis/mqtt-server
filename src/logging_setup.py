@@ -16,7 +16,7 @@ class ColoredFormatter(logging.Formatter):
     UNDERLINE = "\033[4m"
 
     COLORS = {
-        logging.DEBUG: BLUE,
+        logging.DEBUG: RESET,
         logging.INFO: GREEN,
         logging.WARNING: YELLOW,
         logging.ERROR: RED,
@@ -33,7 +33,7 @@ class LoggerSetup:
     """Setup logging with colored output for the entire application."""
 
     @staticmethod
-    def setup(log_level=logging.INFO, log_format="%(asctime)s [%(levelname)8s] %(name)s: %(message)s"):
+    def setup(log_level=logging.INFO, log_format="%(asctime)s [%(levelname)s]\t %(name)s\t: %(message)s"):
         """
         Configure logging with colored output
 

@@ -107,8 +107,7 @@ class PacketValidator:
             # basically if it's 0
             raise PacketValidatorError("Invalid command byte")
 
-        logger.info(f'Received packet type: {COMMAND_BYTES[command]}', extra={
-                    'event': 'packet_type'})
+        # logger.debug('Received packet type: %s', COMMAND_BYTES[command])
 
         handler = self.handlers[command]
         return handler()
@@ -136,7 +135,7 @@ class PacketValidator:
 
         # Check return code and print the result
         if return_code == 0x00:
-            logger.info("Connection Accepted", extra={'event': 'connack'})
+            pass  # Connection Accepted, no error
         elif return_code == 0x01:
             raise PacketValidatorError(
                 "Connection Refused - Unacceptable Protocol Version")
@@ -154,7 +153,7 @@ class PacketValidator:
         else:
             raise PacketValidatorError(f"Unknown return code: {return_code}")
 
-        return MQTTPacket(fixed_header, self.packet, data={'flags': response_flags}, send_func=self.send_func)
+        return MQTTPacket(fixed_header, self.packet, data={'flags': response_flags, 'return_code': return_code}, send_func=self.send_func)
 
     def handle_publish(self):
         if len(self.packet) < 4:
@@ -208,7 +207,7 @@ class PacketValidator:
         except UnicodeDecodeError:
             payload = payload_bytes  # fallback to raw bytes if not UTF-8
 
-        logger.info(
+        logger.debug(
             f"PUBLISH packet: topic={topic}, qos={qos_level}, dup={dup_flag}, retain={retain}, packet_id={packet_id}")
 
         return MQTTPacket(
@@ -239,7 +238,7 @@ class PacketValidator:
         packet_id = (self.packet[2] << 8) | self.packet[3]
         packet_id = int.from_bytes(self.packet[2:], 'big')
 
-        logger.info(f"Received PUBACK for Packet ID: {packet_id}")
+        logger.debug(f"Received PUBACK for Packet ID: {packet_id}")
 
         return MQTTPacket(fixed_header, self.packet, data={'packet_id': packet_id}, send_func=self.send_func)
 
@@ -257,7 +256,7 @@ class PacketValidator:
 
         packet_id = int.from_bytes(self.packet[2:], 'big')
 
-        logger.info(f"Received PUBREC for Packet ID: {packet_id}")
+        logger.debug(f"Received PUBREC for Packet ID: {packet_id}")
 
         return MQTTPacket(fixed_header, self.packet, data={'packet_id': packet_id}, send_func=self.send_func)
 
@@ -275,7 +274,7 @@ class PacketValidator:
 
         packet_id = int.from_bytes(self.packet[2:], 'big')
 
-        logger.info(f"Received PUBREL for Packet ID: {packet_id}")
+        logger.debug(f"Received PUBREL for Packet ID: {packet_id}")
 
         return MQTTPacket(fixed_header, self.packet, data={'packet_id': packet_id}, send_func=self.send_func)
 
@@ -293,7 +292,7 @@ class PacketValidator:
 
         packet_id = int.from_bytes(self.packet[2:], 'big')
 
-        logger.info(f"Received PUBCOMP for Packet ID: {packet_id}")
+        logger.debug(f"Received PUBCOMP for Packet ID: {packet_id}")
 
         return MQTTPacket(fixed_header, self.packet, data={'packet_id': packet_id}, send_func=self.send_func)
 
@@ -322,7 +321,7 @@ class PacketValidator:
         # TODO more readable
         return_codes = list(self.packet[index:index + (remaining_length - 2)])
 
-        logger.info(
+        logger.debug(
             f"Received SUBACK: Packet ID={packet_id}, Return Codes={return_codes}")
 
         return MQTTPacket(
@@ -335,7 +334,7 @@ class PacketValidator:
         )
 
     def handle_pingresp(self):
-        logger.info("Received PINGRESP")
+        logger.debug("Received PINGRESP")
         # TODO this isnt the response I dont think...
         return MQTTPacket(self.packet[0], self.packet, send_func=self.send_func)
 

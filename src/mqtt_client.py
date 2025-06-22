@@ -4,7 +4,7 @@ import threading
 
 from logging_setup import LoggerSetup
 import logging  # for initial log level
-LoggerSetup.setup(log_level=logging.DEBUG)
+LoggerSetup.setup(log_level=logging.INFO)
 logger = LoggerSetup.get_logger(__name__)
 logger.debug('MQTT Client module initialized')
 
