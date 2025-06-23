@@ -27,6 +27,15 @@ class MQTTClientConnection:
         self.on_disconnect = lambda: None
         self.on_message = lambda topic, payload: None
 
+        # lwt
+        self.will_topic = None
+        self.will_payload = None
+        self.will_qos = 0
+        self.will_retain = False
+        #
+        self.username = None
+        self.password = None
+
         # needs to be instance to handle increasing packet ids
         # send is attached to packets so we need to pass it here
         self.pg = PacketGenerator(self.send)
@@ -37,6 +46,12 @@ class MQTTClientConnection:
 
     def generate_random_client_id(self):
         return 'PYMQTTClient-'.join(random.choices(string.ascii_letters + string.digits, k=8))
+
+    def set_will(self, topic, payload, qos=0, retain=False):
+        self.will_topic = topic
+        self.will_payload = payload
+        self.will_qos = qos
+        self.will_retain = retain
 
     def connect(self, timeout):
         logger.info('Attempting to connect to MQTT server')
@@ -121,13 +136,16 @@ class MQTTClientConnection:
 
     def negotiate_connection_to_server(self, timeout):
         connect_packet = self.pg.create_connect_packet(
-            client_id=self.client_id)
+            client_id=self.client_id, will_topic=self.will_topic,
+            will_message=self.will_payload, will_qos=self.will_qos,
+            will_retain=self.will_retain, username=self.username,
+            password=self.password, keep_alive=self.keep_alive)
         data = None
 
         try:
+            self.conn.settimeout(timeout)
             connect_packet.send()
             logger.debug('Connection packet sent, waiting for response...')
-            self.conn.settimeout(timeout)
             data = self.conn.recv(4)
         except TimeoutError:
             logger.warning('No response from server.')

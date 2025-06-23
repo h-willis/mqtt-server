@@ -52,6 +52,11 @@ class MQTTClient:
 
         self.connection.subscribe(topic, qos)
 
+    def set_will(self, topic, payload, qos=0, retain=False):
+        logging.info('Setting lwt to: %s %s %s %s',
+                     topic, payload, qos, retain)
+        self.connection.set_will(topic, payload, qos, retain)
+
     @property
     def connected(self):
         return self.connection.connected
@@ -63,6 +68,7 @@ class MQTTClient:
 
 if __name__ == '__main__':
     client = MQTTClient('localhost', 1883, 'PYMQTTClient-00000000')
+    client.set_will('will_tip', 'will payload', 1, True)
 
     def message_handler(topic, payload):
         logger.debug('ON MESSAGE Message recieved %s: %s', topic, payload)

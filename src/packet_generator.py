@@ -45,29 +45,78 @@ class PacketGenerator:
                 break
         return encoded
 
-    def create_connect_packet(self, keep_alive=60, client_id=None):
-        # TODO connect flags, username, password, protocol name, lwt
+    def create_connect_packet(
+        self,
+        keep_alive=60,
+        client_id=None,
+        clean_session=True,
+        username=None,
+        password=None,
+        will_topic=None,
+        will_message=None,
+        will_qos=0,
+        will_retain=False
+    ):
+        # Protocol Name and Level
         protocol_name = self._encode_string_with_length('MQTT')
         protocol_level = bytes([0x04])  # MQTT 3.1.1
 
-        # TODO connect flags
-        connect_flags = bytes([0])
+        # Connect Flags
+        connect_flags = 0
+        if clean_session:
+            connect_flags |= 0x02
+        if will_topic is not None and will_message is not None:
+            connect_flags |= 0x04  # Will Flag
+            connect_flags |= (will_qos & 0x03) << 3
+            if will_retain:
+                connect_flags |= 0x20
+        if username is not None:
+            connect_flags |= 0x80
+        if password is not None:
+            connect_flags |= 0x40
 
-        # TODO range check
+        connect_flags = bytes([connect_flags])
+
+        # Keep Alive
         keep_alive_bytes = keep_alive.to_bytes(2, 'big')
 
         variable_header = protocol_name + protocol_level + connect_flags + keep_alive_bytes
 
-        # TODO check client_id
-        payload = self._encode_string_with_length(client_id)
+        # Payload
+        payload = b''
+        payload += self._encode_string_with_length(
+            client_id if client_id is not None else '')
+
+        if will_topic is not None and will_message is not None:
+            payload += self._encode_string_with_length(will_topic)
+            payload += self._encode_string_with_length(will_message)
+
+        if username is not None:
+            payload += self._encode_string_with_length(username)
+        if password is not None:
+            payload += self._encode_string_with_length(password)
 
         command_byte = bytes([packets.CONNECT_BYTE])  # connect packet flag
         remaining_length = self._encode_remaining_length(
             len(variable_header) + len(payload))
 
         raw_bytes = command_byte + remaining_length + variable_header + payload
-        # I dont think we need any of this returned in the data field
-        return MQTTPacket(command_byte, raw_bytes, send_func=self.send_func)
+        return MQTTPacket(
+            command_byte,
+            raw_bytes,
+            data={
+                'client_id': client_id,
+                'clean_session': clean_session,
+                'username': username,
+                'password': password,
+                'will_topic': will_topic,
+                'will_message': will_message,
+                'will_qos': will_qos,
+                'will_retain': will_retain,
+                'keep_alive': keep_alive
+            },
+            send_func=self.send_func
+        )
 
     def create_publish_packet(self, topic, payload, qos, retain):
         logger.info(
