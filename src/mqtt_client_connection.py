@@ -180,6 +180,7 @@ class MQTTClientConnection:
         sub_packet.send()
 
     def loop(self):
+        # TODO break this up
         logger.info('Entering loop')
         buffer = bytearray()
         while True:

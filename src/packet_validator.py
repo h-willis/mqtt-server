@@ -113,6 +113,7 @@ class PacketValidator:
             raise PacketValidatorError(
                 f"Failed to decode remaining length: {e}") from e
 
+        # TODO potentially pass this to the handler so it doesn't have to decode it again
         total_length = 1 + consumed_bytes + remaining_length
         if len(self.packet) != total_length:
             raise PacketValidatorError(
