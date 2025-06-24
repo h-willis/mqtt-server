@@ -4,7 +4,7 @@ import threading
 
 from logging_setup import LoggerSetup
 import logging  # for initial log level
-LoggerSetup.setup(log_level=logging.INFO)
+LoggerSetup.setup(log_level=logging.DEBUG)
 logger = LoggerSetup.get_logger(__name__)
 logger.debug('MQTT Client module initialized')
 
@@ -12,10 +12,10 @@ logger.debug('MQTT Client module initialized')
 
 
 class MQTTClient:
-    def __init__(self, address, port, client_id=None, keep_alive=60):
+    def __init__(self, address, port, client_id=None, keep_alive=60, clean_session=True):
         self.keep_alive = keep_alive
         self.connection = MQTTClientConnection(
-            address, port, client_id, keep_alive)
+            address, port, client_id, keep_alive, clean_session)
 
         # internals
         # TODO move these
@@ -71,11 +71,11 @@ if __name__ == '__main__':
     client.set_will('will_tip', 'will payload', 1, True)
 
     def message_handler(topic, payload):
-        logger.debug('ON MESSAGE Message recieved %s: %s', topic, payload)
+        print('ON MESSAGE Message recieved %s: %s', topic, payload)
 
     def connect_handler():
         logger.debug('ON CONNECT called')
-        client.subscribe('testsubqos2/', 2)
+        client.subscribe('testsubqos2/#', 2)
         client.start_loop()
 
     def disconnect_handler():

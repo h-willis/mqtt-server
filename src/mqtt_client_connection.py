@@ -14,10 +14,11 @@ logger = LoggerSetup.get_logger(__name__)
 
 
 class MQTTClientConnection:
-    def __init__(self, address, port, client_id=None, keep_alive=60):
+    def __init__(self, address, port, client_id=None, keep_alive=60, clean_session=True):
         self.address = address
         self.port = port
         self.keep_alive = keep_alive
+        self.clean_session = clean_session
         self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client_id = client_id if client_id else self.generate_random_client_id()
 
@@ -73,6 +74,8 @@ class MQTTClientConnection:
         except PacketValidatorError as e:
             # invalid packet for some reason
             logger.error(e.message)
+            logger.error('Offending data: %s',
+                         '\\x'.join(f"{byte:02x}" for byte in server_response))
             self.connected = False
             return
 
@@ -139,7 +142,8 @@ class MQTTClientConnection:
             client_id=self.client_id, will_topic=self.will_topic,
             will_message=self.will_payload, will_qos=self.will_qos,
             will_retain=self.will_retain, username=self.username,
-            password=self.password, keep_alive=self.keep_alive)
+            password=self.password, keep_alive=self.keep_alive,
+            clean_session=self.clean_session)
         data = None
 
         try:
@@ -197,6 +201,8 @@ class MQTTClientConnection:
                 self.handle_packet(packet)
             except PacketValidatorError as e:
                 logger.error(e)
+                logger.error('Offending data: %s', '\\x'.join(
+                    f"{byte:02x}" for byte in data))
 
     def handle_packet(self, packet):
         # TODO break this up

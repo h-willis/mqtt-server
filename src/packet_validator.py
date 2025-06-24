@@ -95,7 +95,6 @@ class PacketValidator:
         datapr = ', '.join(f"{byte:02x}" for byte in packet)
         logger.debug(f'recv {datapr}')
 
-        # just look at top 4 bytes
         self.packet = packet
         if not self.packet:
             raise PacketValidatorError("No packet to handle")
@@ -104,10 +103,20 @@ class PacketValidator:
         command = self.packet[0] & 0xf0
 
         if command not in COMMAND_BYTES:
-            # basically if it's 0
             raise PacketValidatorError("Invalid command byte")
 
-        # logger.debug('Received packet type: %s', COMMAND_BYTES[command])
+        # Decode Remaining Length and check packet size
+        try:
+            remaining_length, consumed_bytes = self._decode_remaining_length(
+                self.packet[1:])
+        except Exception as e:
+            raise PacketValidatorError(
+                f"Failed to decode remaining length: {e}") from e
+
+        total_length = 1 + consumed_bytes + remaining_length
+        if len(self.packet) != total_length:
+            raise PacketValidatorError(
+                "Packet length does not match remaining length bytes")
 
         handler = self.handlers[command]
         return handler()
