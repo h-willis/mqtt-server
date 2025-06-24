@@ -181,13 +181,16 @@ class MQTTClientConnection:
 
     def loop(self):
         logger.info('Entering loop')
+        buffer = bytearray()
         while True:
-            # TODO read more data if this isnt long enough
-            # read a bunch more until no more data, or construct the bytes-left
-            # of the packet and read that much more?
-            # TODO read only one byte, then construct length from next bytes as
-            # server batch sends data
-            data = self.conn.recv(1024)
+            try:
+                data = self.conn.recv(1024)
+            except OSError as e:
+                logger.error(f"Socket error: {e}")
+                self.connected = False
+                self.call_on_disconnect()
+                return
+
             if not data:
                 self.connected = False
                 self.call_on_disconnect()
@@ -195,14 +198,43 @@ class MQTTClientConnection:
                 logger.info(f'{self.client_id} Disconnected')
                 return
 
-            try:
-                packet = self.validator.validate_packet(data)
-                logger.debug(packet)
-                self.handle_packet(packet)
-            except PacketValidatorError as e:
-                logger.error(e)
-                logger.error('Offending data: %s', '\\x'.join(
-                    f"{byte:02x}" for byte in data))
+            buffer.extend(data)
+
+            while True:
+                if len(buffer) < 2:
+                    break
+
+                # Parse MQTT Remaining Length (variable-length encoding)
+                remaining_length = 0
+                multiplier = 1
+                bytes_used = 1
+                for i in range(1, min(5, len(buffer))):
+                    byte = buffer[i]
+                    bytes_used += 1
+                    remaining_length += (byte & 127) * multiplier
+                    if (byte & 128) == 0:
+                        break
+                    multiplier *= 128
+                else:
+                    break
+
+                total_packet_length = bytes_used + remaining_length
+                if len(buffer) < total_packet_length:
+                    break
+
+                packet_bytes = bytes(buffer[:total_packet_length])
+
+                try:
+                    packet = self.validator.validate_packet(packet_bytes)
+                    logger.debug(packet)
+                    self.handle_packet(packet)
+                    del buffer[:total_packet_length]
+                except PacketValidatorError as e:
+                    logger.error(e)
+                    logger.error('Offending data: %s', '\\x'.join(
+                        f"{byte:02x}" for byte in packet_bytes))
+                    # Remove the first byte and try again (skip bad data)
+                    del buffer[0]
 
     def handle_packet(self, packet):
         # TODO break this up
