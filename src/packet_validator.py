@@ -55,17 +55,6 @@ class PacketValidatorError(Exception):
         self.message = message
         super().__init__(f"Error while handling packet: {message}")
 
-
-# class HandlerResponse:
-#     def __init__(self, command, data=None):
-#         self.command = command
-#         # topic, payload, pid
-#         self.data = data if data is not None else {}
-
-#     def __str__(self):
-#         # TODO fix this command bytes masking
-#         return f'{COMMAND_BYTES[self.command & 0xf0]} | Data:\r\n{pformat(self.data)}'
-
 # TODO check through all this as GPT generated
 
 
@@ -90,6 +79,8 @@ class PacketValidator:
             packets.AUTH_BYTE: self.handler_not_implemented,        # "AUTH"
         }
         self.send_func = send_func
+        self.remaining_length = None
+        self.consumed_bytes = None
 
     def validate_packet(self, packet):
         datapr = ', '.join(f"{byte:02x}" for byte in packet)
@@ -113,11 +104,14 @@ class PacketValidator:
             raise PacketValidatorError(
                 f"Failed to decode remaining length: {e}") from e
 
-        # TODO potentially pass this to the handler so it doesn't have to decode it again
         total_length = 1 + consumed_bytes + remaining_length
         if len(self.packet) != total_length:
             raise PacketValidatorError(
                 "Packet length does not match remaining length bytes")
+
+        # saves decoding of length being done twice
+        self.remaining_length = remaining_length
+        self.consumed_bytes = consumed_bytes
 
         handler = self.handlers[command]
         return handler()
@@ -170,10 +164,6 @@ class PacketValidator:
             raise PacketValidatorError("Invalid PUBLISH packet length")
 
         fixed_header = self.packet[0]
-        packet_type = fixed_header & 0xF0
-        if packet_type != 0x30:
-            # TODO not sure this check is required
-            raise PacketValidatorError("Invalid PUBLISH packet type")
 
         # Extract flags
         dup_flag = (fixed_header & 0x08) >> 3
@@ -182,12 +172,9 @@ class PacketValidator:
             raise PacketValidatorError(f"Invalid qos level: {qos_level}")
         retain = fixed_header & 0x01
 
-        # Decode Remaining Length (MQTT uses a variable-length encoding)
-        remaining_length, consumed_bytes = self._decode_remaining_length(
-            self.packet[1:])
-        index = 1 + consumed_bytes
+        index = 1 + self.consumed_bytes
 
-        if len(self.packet) < index + remaining_length:
+        if len(self.packet) < index + self.remaining_length:
             raise PacketValidatorError("Incomplete PUBLISH packet")
 
         # Parse Topic Name
@@ -314,12 +301,9 @@ class PacketValidator:
         if fixed_header != 0x90:
             raise PacketValidatorError("Invalid SUBACK packet header")
 
-        # Decode Remaining Length using the variable-length method
-        remaining_length, consumed_bytes = self._decode_remaining_length(
-            self.packet[1:])
-        index = 1 + consumed_bytes
+        index = 1 + self.consumed_bytes
 
-        if len(self.packet) < index + remaining_length:
+        if len(self.packet) < index + self.remaining_length:
             raise PacketValidatorError("Incomplete SUBACK packet")
 
         # Packet Identifier (2 bytes)
@@ -329,7 +313,8 @@ class PacketValidator:
 
         # Return codes (one byte per subscription topic)
         # TODO more readable
-        return_codes = list(self.packet[index:index + (remaining_length - 2)])
+        return_codes = list(
+            self.packet[index:index + (self.remaining_length - 2)])
 
         logger.debug(
             f"Received SUBACK: Packet ID={packet_id}, Return Codes={return_codes}")
@@ -344,9 +329,7 @@ class PacketValidator:
         )
 
     def handle_pingresp(self):
-        logger.debug("Received PINGRESP")
-        # TODO this isnt the response I dont think...
-        return MQTTPacket(self.packet[0], self.packet, send_func=self.send_func)
+        return MQTTPacket(packets.PINGRESP_BYTE, self.packet, send_func=self.send_func)
 
     def handler_not_implemented(self):
         logger.warning('Handler not implemented for this packet type')

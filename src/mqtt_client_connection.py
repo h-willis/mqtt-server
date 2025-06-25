@@ -160,7 +160,6 @@ class MQTTClientConnection:
         return data
 
     def publish(self, topic, payload, qos, retain):
-        # TODO dup might not be needed here
         if not self.connected:
             logger.warning(f'Cant publish to {topic}, not connected to server')
             return
