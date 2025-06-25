@@ -65,7 +65,6 @@ class MQTTClientConnection:
         logger.info(
             f'Client: {self.client_id} connected to {self.address}:{self.port}')
 
-        # TODO this could be better
         server_response = self.negotiate_connection_to_server(timeout)
 
         try:
@@ -77,6 +76,10 @@ class MQTTClientConnection:
             logger.error('Offending data: %s',
                          '\\x'.join(f"{byte:02x}" for byte in server_response))
             self.connected = False
+            return
+
+        if server_response.command_byte != packet.CONNACK_BYTE:
+            logger.error('Incorrect response from server')
             return
 
         logger.info('We connected!')
