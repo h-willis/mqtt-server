@@ -227,9 +227,9 @@ class PacketGenerator:
 
     def get_packet_id_bytes(self, start=1):
         # pid cant be 0 so must start at 1
-        # TODO should the client have some non vol memory to start the pid at
-        # the last used value?
-        # TODO loop round at highest pid value - 16 bits?
+        # TODO add last used PID to persistent memory
         while True:
             yield start.to_bytes(2, 'big')
             start += 1
+            if start > 65536:
+                start = 1
