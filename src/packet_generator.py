@@ -231,5 +231,5 @@ class PacketGenerator:
         while True:
             yield start.to_bytes(2, 'big')
             start += 1
-            if start > 65536:
+            if start > 65535:
                 start = 1
