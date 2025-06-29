@@ -1,3 +1,4 @@
+import packets
 
 
 class MQTTPacket:
@@ -5,6 +6,7 @@ class MQTTPacket:
     # topic and payload are encoded as utf-8 strings
     def __init__(self, command_byte, raw_bytes, data=None, send_func=None):
         self.command_byte = command_byte
+        # TODO check why this is necesarry
         if isinstance(command_byte, bytes):
             self.command_byte = command_byte[0]
         self.raw_bytes = raw_bytes
@@ -42,11 +44,11 @@ class MQTTPacket:
 
     @property
     def dup(self):
-        return (self.command_byte & 0x08) != 0
+        return (self.command_byte & packets.DUP_BIT) != 0
 
     def set_dup_bit(self):
         """ Sets the DUP bit in the command byte """
-        self.command_byte |= 0x08
+        self.command_byte |= packets.DUP_BIT
 
     def send(self):
         if not self.send_func:
